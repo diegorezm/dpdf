@@ -116,12 +116,59 @@ pub fn fit_page_zoom(page_size: (f32, f32), viewport: (f32, f32)) -> f32 {
     (available / height_at_fit_width).clamp(MIN_ZOOM, 1.0)
 }
 
-pub fn zoom_in(zoom: f32) -> f32 {
-    (zoom * ZOOM_STEP).min(MAX_ZOOM)
+/// How pages are scaled. The fit modes are recomputed on every resize.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Zoom {
+    FitWidth,
+    FitPage,
+    /// A factor relative to fit width.
+    Custom(f32),
 }
 
-pub fn zoom_out(zoom: f32) -> f32 {
-    (zoom / ZOOM_STEP).max(MIN_ZOOM)
+impl Zoom {
+    /// The scale factor relative to fit width, for the page being read.
+    pub fn factor(self, page_size: (f32, f32), viewport: (f32, f32)) -> f32 {
+        match self {
+            Zoom::FitWidth => 1.0,
+            Zoom::FitPage => fit_page_zoom(page_size, viewport),
+            Zoom::Custom(factor) => factor.clamp(MIN_ZOOM, MAX_ZOOM),
+        }
+    }
+
+    pub fn zoom_in(factor: f32) -> Self {
+        Zoom::Custom((factor * ZOOM_STEP).min(MAX_ZOOM))
+    }
+
+    pub fn zoom_out(factor: f32) -> Self {
+        Zoom::Custom((factor / ZOOM_STEP).max(MIN_ZOOM))
+    }
+
+    pub fn to_token(self) -> String {
+        match self {
+            Zoom::FitWidth => "fit-width".to_owned(),
+            Zoom::FitPage => "fit-page".to_owned(),
+            Zoom::Custom(factor) => factor.to_string(),
+        }
+    }
+
+    pub fn from_token(token: &str) -> Option<Self> {
+        match token {
+            "fit-width" => Some(Zoom::FitWidth),
+            "fit-page" => Some(Zoom::FitPage),
+            _ => {
+                let factor: f32 = token.parse().ok()?;
+                (factor.is_finite() && factor > 0.0).then_some(Zoom::Custom(factor))
+            }
+        }
+    }
+}
+
+/// Zoom as a percentage of the page's real size (1pt = 1/72in, 96 px/in).
+pub fn percent(page_width_px: f32, page_width_pt: f32) -> i32 {
+    if page_width_pt <= 0.0 {
+        return 100;
+    }
+    (page_width_px / (page_width_pt * 96.0 / 72.0) * 100.0).round() as i32
 }
 
 #[cfg(test)]
@@ -164,8 +211,8 @@ mod tests {
         let layout = Layout::new(&[(100.0, 100.0)], 248.0, 2.0);
         assert_eq!(layout.rect(0).map(|r| r.width), Some(400.0));
         assert_eq!(layout.content_width(), 448.0);
-        assert_eq!(zoom_in(MAX_ZOOM), MAX_ZOOM);
-        assert_eq!(zoom_out(MIN_ZOOM), MIN_ZOOM);
+        assert_eq!(Zoom::zoom_in(MAX_ZOOM), Zoom::Custom(MAX_ZOOM));
+        assert_eq!(Zoom::zoom_out(MIN_ZOOM), Zoom::Custom(MIN_ZOOM));
     }
 
     #[test]
@@ -178,6 +225,26 @@ mod tests {
         assert!((zoom - 400.0 / 792.0).abs() < 1e-4);
         // A wide page already fits at fit width.
         assert_eq!(fit_page_zoom((800.0, 100.0), (500.0, 800.0)), 1.0);
+    }
+
+    #[test]
+    fn zoom_modes() {
+        let viewport = (612.0 + 2.0 * SIDE_MARGIN, 400.0 + 2.0 * GAP);
+        assert_eq!(Zoom::FitWidth.factor((612.0, 792.0), viewport), 1.0);
+        assert!(Zoom::FitPage.factor((612.0, 792.0), viewport) < 1.0);
+        assert_eq!(Zoom::Custom(99.0).factor((1.0, 1.0), viewport), MAX_ZOOM);
+        for zoom in [Zoom::FitWidth, Zoom::FitPage, Zoom::Custom(1.5)] {
+            assert_eq!(Zoom::from_token(&zoom.to_token()), Some(zoom));
+        }
+        assert_eq!(Zoom::from_token("-1"), None);
+        assert_eq!(Zoom::from_token("abc"), None);
+    }
+
+    #[test]
+    fn percent_of_real_size() {
+        assert_eq!(percent(816.0, 612.0), 100);
+        assert_eq!(percent(408.0, 612.0), 50);
+        assert_eq!(percent(10.0, 0.0), 100);
     }
 
     #[test]

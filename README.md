@@ -40,9 +40,11 @@ cargo build --release                       # optimized binary: target/release/d
 | `Ctrl+O` | Open PDF |
 | `Ctrl+F` | Search (`Enter` / `Shift+Enter` for next / previous match) |
 | `Ctrl+P` | Go to page |
-| `Ctrl++` / `Ctrl+-` | Zoom in / out |
+| `Ctrl++` / `Ctrl+-` / `Ctrl`+wheel | Zoom in / out |
 | `Ctrl+0` / `Ctrl+1` | Fit width |
 | `Ctrl+2` | Fit page |
+
+Fit width, fit page, and the zoom level are also in the header. The fit modes follow the window as it resizes.
 | `Ctrl+B` | Toggle thumbnail sidebar |
 | `Left` / `PageUp` | Previous page |
 | `Right` / `PageDown` | Next page |

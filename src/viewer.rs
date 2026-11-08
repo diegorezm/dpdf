@@ -10,7 +10,7 @@ use std::rc::Rc;
 use slint::{ComponentHandle, Image, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
 
 use crate::keymap::Action;
-use crate::layout::{self, Layout};
+use crate::layout::{self, Layout, Zoom};
 use crate::nav;
 use crate::pdf::{Bitmap, NormRect, Request, Worker};
 use crate::search::SearchState;
@@ -38,7 +38,7 @@ pub struct Viewer {
     pending: Option<PathBuf>,
     page_sizes: Vec<(f32, f32)>,
     layout: Layout,
-    zoom: f32,
+    zoom: Zoom,
     current_page: usize,
     pages: Rc<VecModel<PageView>>,
     /// Rendered pages and the pixel width they were rendered at.
@@ -72,7 +72,7 @@ impl Viewer {
             pending: None,
             page_sizes: Vec::new(),
             layout: Layout::default(),
-            zoom: 1.0,
+            zoom: Zoom::FitWidth,
             current_page: 0,
             pages,
             cache: HashMap::new(),
@@ -122,7 +122,7 @@ impl Viewer {
             .cloned();
 
         self.page_sizes = page_sizes;
-        self.zoom = restored.as_ref().map_or(1.0, |r| r.zoom);
+        self.zoom = restored.as_ref().map_or(Zoom::FitWidth, |r| r.zoom);
         self.current_page = 0;
         self.layout = Layout::default();
         self.cache.clear();
@@ -189,7 +189,9 @@ impl Viewer {
         let old_height = self.layout.content_height();
         let top = -window.get_viewport_y();
 
-        self.layout = Layout::new(&self.page_sizes, window.get_reader_width(), self.zoom);
+        let factor = self.zoom_factor(window);
+        self.layout = Layout::new(&self.page_sizes, window.get_reader_width(), factor);
+        self.update_zoom_display(window);
         window.set_content_width(self.layout.content_width());
         window.set_content_height(self.layout.content_height());
 
@@ -280,19 +282,16 @@ impl Viewer {
 
     pub fn handle(&mut self, window: &AppWindow, action: Action) {
         match action {
-            Action::ZoomIn => self.set_zoom(window, layout::zoom_in(self.zoom)),
-            Action::ZoomOut => self.set_zoom(window, layout::zoom_out(self.zoom)),
-            Action::ZoomReset | Action::FitWidth => self.set_zoom(window, 1.0),
-            Action::FitPage => {
-                // Relayout moves the current page, so remember it first.
-                let page = self.current_page;
-                let Some(&size) = self.page_sizes.get(page) else {
-                    return;
-                };
-                let viewport = (window.get_reader_width(), window.get_reader_height());
-                self.set_zoom(window, layout::fit_page_zoom(size, viewport));
-                self.go_to_page(window, page);
+            Action::ZoomIn => {
+                let factor = self.zoom_factor(window);
+                self.set_zoom(window, Zoom::zoom_in(factor));
             }
+            Action::ZoomOut => {
+                let factor = self.zoom_factor(window);
+                self.set_zoom(window, Zoom::zoom_out(factor));
+            }
+            Action::ZoomReset | Action::FitWidth => self.set_zoom(window, Zoom::FitWidth),
+            Action::FitPage => self.set_zoom(window, Zoom::FitPage),
             Action::Search => self.set_overlay(window, "search"),
             Action::GoToPage if !self.page_sizes.is_empty() => {
                 window.set_goto_text(ui_int(self.current_page + 1).to_string().into());
@@ -351,13 +350,44 @@ impl Viewer {
         self.refresh(window);
     }
 
-    fn set_zoom(&mut self, window: &AppWindow, zoom: f32) {
+    fn set_zoom(&mut self, window: &AppWindow, zoom: Zoom) {
         if self.page_sizes.is_empty() || zoom == self.zoom {
             return;
         }
+        // Relayout moves the current page, so remember it first.
+        let page = self.current_page;
         self.zoom = zoom;
         self.relayout(window);
+        if zoom == Zoom::FitPage {
+            self.go_to_page(window, page);
+        }
         self.remember_position();
+    }
+
+    /// Scale relative to fit width for the current zoom mode.
+    fn zoom_factor(&self, window: &AppWindow) -> f32 {
+        let page = self
+            .page_sizes
+            .get(self.current_page)
+            .or(self.page_sizes.first())
+            .copied()
+            .unwrap_or((1.0, 1.0));
+        let viewport = (window.get_reader_width(), window.get_reader_height());
+        self.zoom.factor(page, viewport)
+    }
+
+    fn update_zoom_display(&self, window: &AppWindow) {
+        let width_px = self.layout.rect(0).map_or(0.0, |r| r.width);
+        let width_pt = self.page_sizes.first().map_or(0.0, |s| s.0);
+        window.set_zoom_percent(layout::percent(width_px, width_pt));
+        window.set_zoom_mode(
+            match self.zoom {
+                Zoom::FitWidth => "fit-width",
+                Zoom::FitPage => "fit-page",
+                Zoom::Custom(_) => "custom",
+            }
+            .into(),
+        );
     }
 
     fn scroll_to(&self, window: &AppWindow, top: f32) {

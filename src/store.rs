@@ -5,13 +5,15 @@
 //! ```text
 //! theme=dark
 //! sidebar=true
-//! recent=<page>\t<zoom>\t<path>
+//! recent=<page>\t<zoom>\t<path>   (zoom: fit-width, fit-page, or a factor)
 //! ```
 //! Unknown or malformed lines are ignored, so the file never blocks startup.
 
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+
+use crate::layout::Zoom;
 
 pub const MAX_RECENT: usize = 20;
 
@@ -26,7 +28,7 @@ pub struct Recent {
     pub path: PathBuf,
     /// Zero-based page the reader was on.
     pub page: usize,
-    pub zoom: f32,
+    pub zoom: Zoom,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,7 +82,7 @@ impl Store {
             out.push_str(&format!(
                 "recent={}\t{}\t{}\n",
                 r.page,
-                r.zoom,
+                r.zoom.to_token(),
                 r.path.display()
             ));
         }
@@ -121,16 +123,12 @@ impl Store {
 fn parse_recent(value: &str) -> Option<Recent> {
     let mut parts = value.splitn(3, '\t');
     let page = parts.next()?.parse().ok()?;
-    let zoom: f32 = parts.next()?.parse().ok()?;
+    let zoom = parts.next()?;
     let path = parts.next().filter(|p| !p.is_empty())?;
     Some(Recent {
         path: PathBuf::from(path),
         page,
-        zoom: if zoom.is_finite() && zoom > 0.0 {
-            zoom
-        } else {
-            1.0
-        },
+        zoom: Zoom::from_token(zoom).unwrap_or(Zoom::FitWidth),
     })
 }
 
@@ -147,7 +145,7 @@ mod tests {
         Recent {
             path: PathBuf::from(path),
             page,
-            zoom: 1.5,
+            zoom: Zoom::Custom(1.5),
         }
     }
 
@@ -173,7 +171,7 @@ mod tests {
             vec![Recent {
                 path: "C:\\b.pdf".into(),
                 page: 3,
-                zoom: 1.0
+                zoom: Zoom::FitWidth
             }]
         );
     }

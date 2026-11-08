@@ -254,6 +254,31 @@ component SettingRow inherits Rectangle {
     }
 }
 
+// Small, quiet text button for the header.
+component HeaderButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    in property <string> tooltip;
+    callback clicked();
+
+    width: label.preferred-width + 14px;
+    border-radius: Theme.radius;
+    background: touch.has-hover ? Theme.hover : transparent;
+
+    label := Text {
+        text: root.text;
+        color: root.active ? Theme.accent : Theme.text-muted;
+        font-size: Theme.font-size;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
 component ShortcutRow inherits HorizontalLayout {
     in property <string> keys;
     in property <string> action;
@@ -308,6 +333,9 @@ export component AppWindow inherits Window {
     in-out property <string> goto-text <=> goto-input.text;
     in property <bool> light-theme;
     in property <bool> sidebar-default;
+    in property <int> zoom-percent: 100;
+    // "fit-width", "fit-page", or "custom".
+    in property <string> zoom-mode: "fit-width";
 
     // Raw key text and modifiers; Rust decides what it means.
     callback key-pressed(string, bool, bool) -> bool;
@@ -320,6 +348,8 @@ export component AppWindow inherits Window {
     callback search-step(bool);
     callback goto-accepted(string);
     callback settings-clicked();
+    // "in", "out", "fit-width", or "fit-page".
+    callback zoom-action(string);
     callback toggle-theme();
     callback toggle-sidebar-default();
 
@@ -365,6 +395,51 @@ export component AppWindow inherits Window {
                         vertical-alignment: center;
                         overflow: elide;
                         horizontal-stretch: 1;
+                    }
+                    if root.page-count > 0: HorizontalLayout {
+                        spacing: 2px;
+                        horizontal-stretch: 0;
+
+                        HeaderButton {
+                            text: "Fit width";
+                            active: root.zoom-mode == "fit-width";
+                            clicked => {
+                                root.zoom-action("fit-width");
+                            }
+                        }
+                        HeaderButton {
+                            text: "Fit page";
+                            active: root.zoom-mode == "fit-page";
+                            clicked => {
+                                root.zoom-action("fit-page");
+                            }
+                        }
+                        Rectangle {
+                            width: Theme.spacing;
+                        }
+                        HeaderButton {
+                            text: "−";
+                            clicked => {
+                                root.zoom-action("out");
+                            }
+                        }
+                        Text {
+                            text: "\{root.zoom-percent}%";
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                            width: 44px;
+                        }
+                        HeaderButton {
+                            text: "+";
+                            clicked => {
+                                root.zoom-action("in");
+                            }
+                        }
+                        Rectangle {
+                            width: Theme.spacing;
+                        }
                     }
                     Text {
                         text: root.page-count == 0 ? "" : root.status != "" ? root.status : "page \{root.current-page} / \{root.page-count}";
@@ -417,6 +492,19 @@ export component AppWindow inherits Window {
                         content-height: root.content-height;
                         viewport-x <=> root.viewport-x;
                         viewport-y <=> root.viewport-y;
+                    }
+
+                    // Ctrl + wheel zooms; plain wheel falls through to scrolling.
+                    TouchArea {
+                        scroll-event(event) => {
+                            if event.modifiers.control {
+                                if event.delta-y != 0 {
+                                    root.zoom-action(event.delta-y > 0 ? "in" : "out");
+                                }
+                                return accept;
+                            }
+                            reject
+                        }
                     }
 
                     if root.page-count == 0: StartScreen {

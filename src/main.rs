@@ -95,6 +95,15 @@ fn main() -> Result<(), slint::PlatformError> {
         .go_to_typed_page(&win, &text));
     on!(window.on_settings_clicked, |viewer, win| viewer
         .handle(&win, Action::Settings));
+    on!(window.on_zoom_action, |viewer, win, action| {
+        let action = match action.as_str() {
+            "in" => Action::ZoomIn,
+            "out" => Action::ZoomOut,
+            "fit-page" => Action::FitPage,
+            _ => Action::FitWidth,
+        };
+        viewer.handle(&win, action)
+    });
     on!(window.on_toggle_theme, |viewer, win| viewer
         .toggle_theme(&win));
     on!(window.on_toggle_sidebar_default, |viewer, win| viewer

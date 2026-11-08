@@ -97,7 +97,7 @@ Rejected by default:
 | `Ctrl+O` | Open PDF |
 | `Ctrl+F` | Search |
 | `Ctrl+P` | Jump to page |
-| `Ctrl++` / `Ctrl+-` | Zoom in / out |
+| `Ctrl++` / `Ctrl+-` / `Ctrl`+wheel | Zoom in / out |
 | `Ctrl+0` | Reset zoom |
 | `Ctrl+1` / `Ctrl+2` | Fit width / fit page |
 | `Ctrl+B` | Toggle sidebar |
