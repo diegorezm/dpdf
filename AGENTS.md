@@ -40,7 +40,7 @@ The app is personal first, but code should be clean enough to open-source later.
 
 **Forbidden:** Electron, Tauri, WebViews, React/Svelte/any JS, browser engines. Performance and native feel are product requirements, not later optimizations.
 
-PDFium is loaded as a shared library at runtime (`pdfium.dll`). It is not yet integrated in the skeleton; when adding it, document how the library is located (ship `pdfium.dll` next to `dpdf.exe`) in the README.
+PDFium is loaded at runtime as `pdfium.dll`, first from the executable's directory, then from the system. `build.rs` downloads the prebuilt DLL matching the `pdfium_8125` feature (`PDFIUM_RELEASE`) once into `target/pdfium/` and copies it next to the built exe. When bumping pdfium-render, keep the feature flag and `PDFIUM_RELEASE` in sync. Tests that need PDFium skip when it can't be loaded.
 
 ## 5. MVP features
 

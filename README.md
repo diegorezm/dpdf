@@ -6,7 +6,7 @@ A fast, minimal, local-first PDF reader for Windows, built with Rust and Slint.
 
 dpdf is a calm, keyboard-first reading environment: the page fills the screen, and controls stay hidden until you need them. There is no telemetry, no accounts, and no network access.
 
-> **Status:** early skeleton. The window, theme, and collapsible sidebar exist; PDF rendering (via PDFium) is next.
+> **Status:** early. You can open a PDF and page through it; continuous scrolling, zoom, thumbnails, and search are next.
 
 ## Requirements
 
@@ -18,6 +18,10 @@ dpdf is a calm, keyboard-first reading environment: the page fills the screen, a
 ```sh
 cargo run
 ```
+
+PDF rendering uses [PDFium](https://pdfium.googlesource.com/pdfium/). The first build downloads a prebuilt `pdfium.dll` (from [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries)) using the `curl` and `tar` that ship with Windows, caches it in `target/pdfium/`, and copies it next to `dpdf.exe`. The app itself never uses the network.
+
+To distribute dpdf, ship `dpdf.exe` and `pdfium.dll` together from `target/release/`.
 
 ## Develop
 
@@ -32,9 +36,13 @@ cargo build --release                       # optimized binary: target/release/d
 
 | Shortcut | Action |
 |---|---|
+| `Ctrl+O` | Open PDF |
 | `Ctrl+B` | Toggle sidebar |
+| `Left` / `PageUp` | Previous page |
+| `Right` / `PageDown` | Next page |
+| `Home` / `End` | First / last page |
 
-More shortcuts are planned (open, search, jump to page, zoom, navigation); see [AGENTS.md](AGENTS.md).
+More shortcuts are planned (search, jump to page, zoom); see [AGENTS.md](AGENTS.md).
 
 ## Contributing
 
