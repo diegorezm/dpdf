@@ -25,24 +25,51 @@ component Sidebar inherits Rectangle {
     }
 }
 
+export struct PageView {
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+    image: image,
+    loaded: bool,
+}
+
+// Continuous strip of pages. Rust positions only the pages near the
+// viewport, so long documents stay cheap.
 component ReadingArea inherits Rectangle {
-    in property <bool> has-page;
-    in property <image> page-image;
+    in property <[PageView]> pages;
+    in property <bool> has-document;
     in property <string> status;
-    // Space available for the rendered page.
-    out property <length> page-width: self.width - 48px;
-    out property <length> page-height: self.height - 32px;
+    in property <length> content-width;
+    in property <length> content-height;
+    in-out property <length> viewport-x;
+    in-out property <length> viewport-y;
 
     background: Theme.background;
 
-    if root.has-page: Image {
-        width: root.page-width;
-        height: root.page-height;
-        source: root.page-image;
-        image-fit: contain;
+    Flickable {
+        content-width: root.content-width;
+        content-height: root.content-height;
+        content-x <=> root.viewport-x;
+        content-y <=> root.viewport-y;
+
+        for page in root.pages: Rectangle {
+            x: page.x;
+            y: page.y;
+            width: page.width;
+            height: page.height;
+            background: page.loaded ? transparent : Theme.surface;
+
+            Image {
+                width: parent.width;
+                height: parent.height;
+                source: page.image;
+                image-fit: fill;
+            }
+        }
     }
 
-    if !root.has-page: Text {
+    if !root.has-document: Text {
         text: root.status != "" ? root.status : "Open a PDF with Ctrl+O";
         color: Theme.text-muted;
         font-size: Theme.font-size;
@@ -60,11 +87,20 @@ export component AppWindow inherits Window {
     in property <int> current-page: 0;
     in property <int> page-count: 0;
 
-    in property <bool> has-page;
-    in property <image> page-image;
     in property <string> status;
-    out property <length> reader-width: reader.page-width;
-    out property <length> reader-height: reader.page-height;
+    in property <[PageView]> pages;
+    in property <length> content-width;
+    in property <length> content-height;
+    in-out property <length> viewport-x;
+    in-out property <length> viewport-y;
+    out property <length> reader-width: reader.width;
+    out property <length> reader-height: reader.height;
+
+    callback scrolled();
+    callback resized();
+    changed viewport-y => { root.scrolled(); }
+    changed reader-width => { root.resized(); }
+    changed reader-height => { root.scrolled(); }
 
     // Raw key text and Ctrl state; Rust decides what it means.
     callback key-pressed(string, bool) -> bool;
@@ -95,7 +131,8 @@ export component AppWindow inherits Window {
                         overflow: elide;
                     }
                     Text {
-                        text: root.page-count > 0 ? "page \{root.current-page} / \{root.page-count}" : "";
+                        text: root.status != "" && root.page-count > 0 ? root.status
+                            : root.page-count > 0 ? "page \{root.current-page} / \{root.page-count}" : "";
                         color: Theme.text-muted;
                         font-size: Theme.font-size;
                         vertical-alignment: center;
@@ -119,9 +156,13 @@ export component AppWindow inherits Window {
             HorizontalLayout {
                 if root.sidebar-visible: Sidebar { }
                 reader := ReadingArea {
-                    has-page: root.has-page;
-                    page-image: root.page-image;
+                    pages: root.pages;
+                    has-document: root.page-count > 0;
                     status: root.status;
+                    content-width: root.content-width;
+                    content-height: root.content-height;
+                    viewport-x <=> root.viewport-x;
+                    viewport-y <=> root.viewport-y;
                 }
             }
         }

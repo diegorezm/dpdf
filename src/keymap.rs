@@ -5,6 +5,9 @@ use slint::platform::Key;
 pub enum Action {
     Open,
     ToggleSidebar,
+    ZoomIn,
+    ZoomOut,
+    ZoomReset,
     PreviousPage,
     NextPage,
     FirstPage,
@@ -17,6 +20,10 @@ pub fn map_key(text: &str, ctrl: bool) -> Option<Action> {
         return match text.to_ascii_lowercase().as_str() {
             "o" => Some(Action::Open),
             "b" => Some(Action::ToggleSidebar),
+            // `=` is the unshifted `+` key on most layouts.
+            "+" | "=" => Some(Action::ZoomIn),
+            "-" => Some(Action::ZoomOut),
+            "0" => Some(Action::ZoomReset),
             _ => None,
         };
     }
@@ -52,6 +59,10 @@ mod tests {
         assert_eq!(map_key("o", true), Some(Action::Open));
         assert_eq!(map_key("O", true), Some(Action::Open));
         assert_eq!(map_key("b", true), Some(Action::ToggleSidebar));
+        assert_eq!(map_key("+", true), Some(Action::ZoomIn));
+        assert_eq!(map_key("=", true), Some(Action::ZoomIn));
+        assert_eq!(map_key("-", true), Some(Action::ZoomOut));
+        assert_eq!(map_key("0", true), Some(Action::ZoomReset));
         assert_eq!(map_key("o", false), None);
     }
 

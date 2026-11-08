@@ -9,7 +9,7 @@ pub fn target_page(action: Action, current: usize, page_count: usize) -> Option<
         Action::NextPage => Some((current + 1).min(last)),
         Action::FirstPage => Some(0),
         Action::LastPage => Some(last),
-        Action::Open | Action::ToggleSidebar => None,
+        _ => None,
     }
 }
 

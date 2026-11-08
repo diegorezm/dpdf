@@ -2,14 +2,36 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod keymap;
+mod layout;
 mod nav;
 mod pdf;
+mod viewer;
+
+use std::cell::RefCell;
 
 use keymap::Action;
-use pdf::{Event, Request, Worker};
-use slint::{Image, Rgba8Pixel, SharedPixelBuffer};
+use pdf::{Event, Worker};
+use viewer::Viewer;
 
 slint::include_modules!();
+
+thread_local! {
+    // UI-thread state. Worker events reach it via invoke_from_event_loop,
+    // whose closures must be Send and so can't capture an Rc.
+    static VIEWER: RefCell<Option<Viewer>> = const { RefCell::new(None) };
+}
+
+fn with_viewer(f: impl FnOnce(&mut Viewer)) {
+    VIEWER.with(|viewer| {
+        // A busy viewer means this is a re-entrant property-change callback;
+        // the outer call refreshes anyway.
+        if let Ok(mut viewer) = viewer.try_borrow_mut() {
+            if let Some(viewer) = viewer.as_mut() {
+                f(viewer);
+            }
+        }
+    });
+}
 
 fn main() -> Result<(), slint::PlatformError> {
     let window = AppWindow::new()?;
@@ -17,30 +39,46 @@ fn main() -> Result<(), slint::PlatformError> {
     let weak = window.as_weak();
     let worker = Worker::spawn(move |event| {
         let weak = weak.clone();
-        // Pixel data is Send; the slint::Image is built on the UI thread.
         let _ = slint::invoke_from_event_loop(move || {
             if let Some(window) = weak.upgrade() {
-                apply_event(&window, event);
+                with_viewer(|viewer| apply_event(viewer, &window, event));
             }
         });
     });
+    VIEWER.with(|viewer| *viewer.borrow_mut() = Some(Viewer::new(&window, worker)));
+
+    // `dpdf file.pdf`, which is also how "Open with" passes files on Windows.
+    if let Some(path) = std::env::args_os().nth(1) {
+        with_viewer(|viewer| viewer.open(path.into()));
+    }
 
     let weak = window.as_weak();
     window.on_key_pressed(move |text, ctrl| {
-        let Some(window) = weak.upgrade() else {
+        let (Some(window), Some(action)) = (weak.upgrade(), keymap::map_key(&text, ctrl)) else {
             return false;
         };
-        let Some(action) = keymap::map_key(&text, ctrl) else {
-            return false;
-        };
-        handle_action(&window, &worker, action);
+        handle_action(&window, action);
         true
+    });
+
+    let weak = window.as_weak();
+    window.on_scrolled(move || {
+        if let Some(window) = weak.upgrade() {
+            with_viewer(|viewer| viewer.refresh(&window));
+        }
+    });
+
+    let weak = window.as_weak();
+    window.on_resized(move || {
+        if let Some(window) = weak.upgrade() {
+            with_viewer(|viewer| viewer.relayout(&window));
+        }
     });
 
     window.run()
 }
 
-fn handle_action(window: &AppWindow, worker: &Worker, action: Action) {
+fn handle_action(window: &AppWindow, action: Action) {
     match action {
         Action::Open => {
             let picked = rfd::FileDialog::new()
@@ -48,61 +86,22 @@ fn handle_action(window: &AppWindow, worker: &Worker, action: Action) {
                 .add_filter("PDF", &["pdf"])
                 .pick_file();
             if let Some(path) = picked {
-                window.set_page_count(0);
-                window.set_status("Opening…".into());
-                worker.send(Request::Open(path));
-                request_render(window, worker, 0);
+                with_viewer(|viewer| viewer.open(path));
             }
         }
         Action::ToggleSidebar => window.set_sidebar_visible(!window.get_sidebar_visible()),
-        _ => {
-            // The UI shows one-based page numbers; navigation is zero-based.
-            let current = usize::try_from(window.get_current_page() - 1).unwrap_or(0);
-            let page_count = usize::try_from(window.get_page_count()).unwrap_or(0);
-            if let Some(page) = nav::target_page(action, current, page_count) {
-                if page != current {
-                    window.set_current_page(ui_int(page + 1));
-                    request_render(window, worker, page);
-                }
-            }
-        }
+        _ => with_viewer(|viewer| viewer.handle(window, action)),
     }
 }
 
-fn request_render(window: &AppWindow, worker: &Worker, page: usize) {
-    let scale = window.window().scale_factor();
-    let to_px = |logical: f32| (logical * scale).max(1.0) as u32;
-    worker.send(Request::Render {
-        page,
-        max_width: to_px(window.get_reader_width()),
-        max_height: to_px(window.get_reader_height()),
-    });
-}
-
-fn apply_event(window: &AppWindow, event: Event) {
+fn apply_event(viewer: &mut Viewer, window: &AppWindow, event: Event) {
     match event {
-        Event::Opened { title, page_count } => {
-            window.set_document_title(title.into());
-            window.set_page_count(ui_int(page_count));
-            window.set_current_page(1);
-            window.set_status("".into());
-        }
-        Event::Rendered(page) => {
-            let buffer = SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
-                &page.rgba,
-                page.width,
-                page.height,
-            );
-            window.set_page_image(Image::from_rgba8(buffer));
-            window.set_has_page(true);
-        }
-        Event::Error(message) => {
-            window.set_has_page(false);
-            window.set_status(message.into());
-        }
+        Event::Opened { title, page_sizes } => viewer.opened(window, title, page_sizes),
+        Event::Rendered {
+            page,
+            width_px,
+            bitmap,
+        } => viewer.rendered(window, page, width_px, bitmap),
+        Event::Error(message) => window.set_status(message.into()),
     }
-}
-
-fn ui_int(value: usize) -> i32 {
-    i32::try_from(value).unwrap_or(i32::MAX)
 }
