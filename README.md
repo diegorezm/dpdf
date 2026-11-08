@@ -2,7 +2,7 @@
 
 # dpdf
 
-A fast, minimal, local-first PDF reader for Linux, built with Rust and Slint.
+A fast, minimal, local-first PDF reader for Windows, built with Rust and Slint.
 
 dpdf is a calm, keyboard-first reading environment: the page fills the screen, and controls stay hidden until you need them. There is no telemetry, no accounts, and no network access.
 
@@ -11,11 +11,7 @@ dpdf is a calm, keyboard-first reading environment: the page fills the screen, a
 ## Requirements
 
 - Rust (stable) via [rustup](https://rustup.rs)
-- On Linux, system libraries for Slint's default backend, e.g. on Debian/Ubuntu:
-
-  ```sh
-  sudo apt install libfontconfig1-dev libxkbcommon-dev libwayland-dev
-  ```
+- Windows with the MSVC toolchain (`rustup default stable-x86_64-pc-windows-msvc`) and the Visual Studio C++ Build Tools
 
 ## Run
 
@@ -29,7 +25,7 @@ cargo run
 cargo test                                  # tests
 cargo fmt --all                             # format
 cargo clippy --all-targets -- -D warnings   # lint
-cargo build --release                       # optimized binary: target/release/dpdf
+cargo build --release                       # optimized binary: target/release/dpdf.exe
 ```
 
 ## Shortcuts

@@ -6,7 +6,7 @@ Guidance for coding agents (and humans) working on **dpdf**. Read this before ch
 
 ## 1. What dpdf is and why it exists
 
-`dpdf` is a personal, local-first desktop PDF reader for Linux. It exists because mainstream PDF apps are bloated, slow, visually generic, and full of features that get in the way of reading.
+`dpdf` is a personal, local-first desktop PDF reader for Windows. It exists because mainstream PDF apps are bloated, slow, visually generic, and full of features that get in the way of reading.
 
 dpdf is **not** an Acrobat/Foxit replacement or a PDF office suite. It is a **fast, minimal, beautiful, keyboard-friendly reader** that feels immediate and stays out of the way. The document is the interface: the page fills the screen, and controls, panels, and overlays stay hidden until needed.
 
@@ -25,7 +25,7 @@ Every feature must earn its place: it must make reading or organizing documents 
 
 ## 3. Target user
 
-A software developer on Linux who reads technical documentation, papers, manuals, and personal documents. They value performance, privacy, simplicity, customizability, and polish. Primary use case: long, focused reading sessions of local PDFs, jumping between pages and searching text.
+A software developer on Windows who reads technical documentation, papers, manuals, and personal documents. They value performance, privacy, simplicity, customizability, and polish. Primary use case: long, focused reading sessions of local PDFs, jumping between pages and searching text.
 
 The app is personal first, but code should be clean enough to open-source later.
 
@@ -40,7 +40,7 @@ The app is personal first, but code should be clean enough to open-source later.
 
 **Forbidden:** Electron, Tauri, WebViews, React/Svelte/any JS, browser engines. Performance and native feel are product requirements, not later optimizations.
 
-PDFium is loaded as a shared library at runtime (`libpdfium.so`). It is not yet integrated in the skeleton; when adding it, document how the library is located (bundled next to the binary, or system path) in the README.
+PDFium is loaded as a shared library at runtime (`pdfium.dll`). It is not yet integrated in the skeleton; when adding it, document how the library is located (ship `pdfium.dll` next to `dpdf.exe`) in the README.
 
 ## 5. MVP features
 
@@ -128,7 +128,7 @@ src/
   app/           // application state, actions, controller (pure where possible)
   pdf/           // PDFium wrapper: open, render, text, search (no UI types)
   render/        // worker thread, request queue, page/thumbnail caches
-  settings/      // load/save config (XDG config dir), defaults, validation
+  settings/      // load/save config (per-user app data dir), defaults, validation
   keymap.rs      // key event -> Action mapping
 ui/
   app.slint      // main window, composes components
@@ -140,7 +140,7 @@ Rules:
 - `.slint` files expose properties and callbacks; they contain no business logic beyond trivial layout/visibility bindings.
 - `pdf/`, `render/`, `settings/`, `app/` must not depend on Slint types, so they are unit-testable. Only `main.rs` (or a thin `ui` glue module) converts between domain types and Slint types (`slint::Image`, models).
 - State flows one way: UI callback → `Action` → controller updates state → controller pushes properties to UI.
-- Paths: use XDG dirs (`$XDG_CONFIG_HOME/dpdf`, `$XDG_CACHE_HOME/dpdf`, `$XDG_STATE_HOME/dpdf`).
+- Paths: use the per-user Windows dirs — settings and state in `%APPDATA%dpdf`, caches in `%LOCALAPPDATA%dpdf`. Never write next to the executable or in the document folder.
 - Grow the module tree when needed; do not create empty modules ahead of time.
 
 ## 11. Coding standards
@@ -169,7 +169,7 @@ Rules:
 
 ## 12. Development workflow
 
-Prerequisites: stable Rust via `rustup`. On Linux, Slint needs system libs for its winit/femtovg backend (e.g. `libfontconfig1-dev`, `libxkbcommon-dev`, `libwayland-dev` on Debian/Ubuntu).
+Prerequisites: stable Rust via `rustup` with the MSVC toolchain (`x86_64-pc-windows-msvc`), plus the Visual Studio C++ Build Tools. No other system libraries are needed for Slint.
 
 ```sh
 cargo run                                   # debug build and launch

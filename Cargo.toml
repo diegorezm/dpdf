@@ -2,7 +2,7 @@
 name = "dpdf"
 version = "0.1.0"
 edition = "2021"
-description = "A fast, minimal, local-first PDF reader for Linux, built with Rust and Slint."
+description = "A fast, minimal, local-first PDF reader for Windows, built with Rust and Slint."
 license = "MIT"
 repository = "https://github.com/diegorezm/dpdf"
 publish = false
