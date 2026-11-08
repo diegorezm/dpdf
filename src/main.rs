@@ -1,9 +1,13 @@
 // Release builds are GUI apps: don't open a console window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod annotations;
+mod app;
+mod config;
 mod keymap;
 mod layout;
 mod nav;
+mod palette;
 mod pdf;
 mod search;
 mod store;
@@ -11,41 +15,44 @@ mod viewer;
 
 use std::cell::RefCell;
 
+use app::App;
 use keymap::Action;
-use pdf::{Event, Worker};
-use store::Store;
-use viewer::Viewer;
+use pdf::Worker;
 
 slint::include_modules!();
 
 thread_local! {
     // UI-thread state. Worker events reach it via invoke_from_event_loop,
     // whose closures must be Send and so can't capture an Rc.
-    static VIEWER: RefCell<Option<Viewer>> = const { RefCell::new(None) };
+    static APP: RefCell<Option<App>> = const { RefCell::new(None) };
 }
 
-fn with_viewer(f: impl FnOnce(&mut Viewer)) {
-    VIEWER.with(|viewer| {
-        // A busy viewer means this is a re-entrant property-change callback;
+fn with_app(f: impl FnOnce(&mut App)) {
+    APP.with(|app| {
+        // A busy app means this is a re-entrant property-change callback;
         // the outer call refreshes anyway.
-        if let Ok(mut viewer) = viewer.try_borrow_mut() {
-            if let Some(viewer) = viewer.as_mut() {
-                f(viewer);
+        if let Ok(mut app) = app.try_borrow_mut() {
+            if let Some(app) = app.as_mut() {
+                f(app);
             }
         }
     });
 }
 
-/// Registers a window callback that runs `f` with the viewer.
+/// Registers a window callback that runs `$body` with the app.
 macro_rules! on {
-    ($window:ident . $setter:ident, |$viewer:ident, $win:ident $(, $arg:ident)*| $body:expr) => {{
+    ($window:ident . $setter:ident, |$app:ident, $win:ident $(, $arg:ident)*| $body:expr) => {{
         let weak = $window.as_weak();
         $window.$setter(move |$($arg),*| {
             if let Some($win) = weak.upgrade() {
-                with_viewer(|$viewer| $body);
+                with_app(|$app| $body);
             }
         });
     }};
+}
+
+fn index(value: i32) -> usize {
+    usize::try_from(value).unwrap_or(0)
 }
 
 fn main() -> Result<(), slint::PlatformError> {
@@ -56,90 +63,81 @@ fn main() -> Result<(), slint::PlatformError> {
         let weak = weak.clone();
         let _ = slint::invoke_from_event_loop(move || {
             if let Some(window) = weak.upgrade() {
-                with_viewer(|viewer| apply_event(viewer, &window, event));
+                with_app(|app| app.event(&window, event));
             }
         });
     });
-    let viewer = Viewer::new(&window, worker, Store::load());
-    VIEWER.with(|cell| *cell.borrow_mut() = Some(viewer));
+    let app = App::new(&window, worker);
+    APP.with(|cell| *cell.borrow_mut() = Some(app));
 
     // `dpdf file.pdf`, which is also how "Open with" passes files on Windows.
-    if let Some(path) = std::env::args_os().nth(1) {
-        with_viewer(|viewer| viewer.open(&window, path.into()));
+    for path in std::env::args_os().skip(1) {
+        with_app(|app| app.open_path(&window, path.into()));
     }
 
     let weak = window.as_weak();
-    window.on_key_pressed(move |text, ctrl, _shift| {
-        let (Some(window), Some(action)) = (weak.upgrade(), keymap::map_key(&text, ctrl)) else {
+    window.on_key_pressed(move |text, ctrl, shift, alt| {
+        let Some(window) = weak.upgrade() else {
             return false;
         };
-        handle_action(&window, action);
-        true
+        let mut handled = false;
+        with_app(|app| handled = app.key_pressed(&window, &text, ctrl, shift, alt));
+        handled
     });
 
-    on!(window.on_scrolled, |viewer, win| viewer.refresh(&win));
-    on!(window.on_resized, |viewer, win| viewer.relayout(&win));
-    on!(window.on_thumbs_scrolled, |viewer, win| viewer
+    on!(window.on_scrolled, |app, win| app.viewer().refresh(&win));
+    on!(window.on_resized, |app, win| app.viewer().relayout(&win));
+    on!(window.on_thumbs_scrolled, |app, win| app
+        .viewer()
         .refresh_thumbs(&win));
-    on!(window.on_thumb_clicked, |viewer, win, page| {
-        viewer.go_to_page(&win, usize::try_from(page).unwrap_or(0))
-    });
-    on!(window.on_open_recent, |viewer, win, index| {
-        viewer.open_recent(&win, usize::try_from(index).unwrap_or(0))
-    });
-    on!(window.on_search_edited, |viewer, win, text| viewer
+    on!(window.on_thumb_clicked, |app, win, page| app
+        .viewer()
+        .go_to_page(&win, index(page)));
+    on!(window.on_open_recent, |app, win, i| app
+        .open_recent(&win, index(i)));
+    on!(window.on_restore_session_clicked, |app, win| app
+        .restore_session(&win));
+    on!(window.on_search_edited, |app, win, text| app
+        .viewer()
         .search_edited(&win, &text));
-    on!(window.on_search_step, |viewer, win, forward| viewer
+    on!(window.on_search_step, |app, win, forward| app
+        .viewer()
         .search_step(&win, forward));
-    on!(window.on_goto_accepted, |viewer, win, text| viewer
+    on!(window.on_goto_accepted, |app, win, text| app
         .go_to_typed_page(&win, &text));
-    on!(window.on_settings_clicked, |viewer, win| viewer
-        .handle(&win, Action::Settings));
-    on!(window.on_zoom_action, |viewer, win, action| {
+    on!(window.on_settings_clicked, |app, win| app
+        .run(&win, Action::Settings));
+    on!(window.on_zoom_action, |app, win, action| {
         let action = match action.as_str() {
             "in" => Action::ZoomIn,
             "out" => Action::ZoomOut,
             "fit-page" => Action::FitPage,
             _ => Action::FitWidth,
         };
-        viewer.handle(&win, action)
+        app.run(&win, action)
     });
-    on!(window.on_toggle_theme, |viewer, win| viewer
-        .toggle_theme(&win));
-    on!(window.on_toggle_sidebar_default, |viewer, win| viewer
-        .toggle_sidebar_default(&win));
+    on!(window.on_tab_clicked, |app, win, i| app
+        .open_tab(&win, index(i)));
+    on!(window.on_tab_closed, |app, win, i| app
+        .close_tab(&win, index(i)));
+    on!(window.on_reader_pointer, |app, win, kind, x, y| app
+        .viewer()
+        .pointer(&win, &kind, x, y));
+    on!(window.on_popup_action, |app, win, action, i| app
+        .popup_action(&win, &action, index(i)));
+    on!(window.on_note_saved, |app, win| app.note_saved(&win));
+    on!(window.on_palette_edited, |app, win, text| app
+        .palette_edited(&win, &text));
+    on!(window.on_palette_moved, |app, win, delta| app
+        .palette_moved(&win, delta));
+    on!(window.on_palette_accepted, |app, win| app
+        .palette_accept(&win, None));
+    on!(window.on_palette_clicked, |app, win, i| app
+        .palette_accept(&win, Some(index(i))));
+    on!(window.on_settings_set, |app, win, key, value| app
+        .setting(&win, &key, &value));
 
     window.run()?;
-    with_viewer(|viewer| viewer.remember_position());
+    with_app(|app| app.quit());
     Ok(())
-}
-
-fn handle_action(window: &AppWindow, action: Action) {
-    if action == Action::Open {
-        // Modal native dialog; returns once the user picks or cancels.
-        let picked = rfd::FileDialog::new()
-            .set_title("Open PDF")
-            .add_filter("PDF", &["pdf"])
-            .pick_file();
-        if let Some(path) = picked {
-            with_viewer(|viewer| viewer.open(window, path));
-        }
-        return;
-    }
-    with_viewer(|viewer| viewer.handle(window, action));
-}
-
-fn apply_event(viewer: &mut Viewer, window: &AppWindow, event: Event) {
-    match event {
-        Event::Opened { title, page_sizes } => viewer.opened(window, title, page_sizes),
-        Event::Rendered {
-            page,
-            width_px,
-            bitmap,
-        } => viewer.rendered(window, page, width_px, bitmap),
-        Event::Thumbnail { page, bitmap } => viewer.thumbnail(window, page, bitmap),
-        Event::SearchHits { id, page, matches } => viewer.search_hits(window, id, page, matches),
-        Event::SearchDone { id } => viewer.search_done(window, id),
-        Event::Error(message) => viewer.open_failed(window, message),
-    }
 }

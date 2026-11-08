@@ -1,0 +1,14 @@
+name = "Gruvbox"
+dark = true
+
+background = "#1d2021"
+surface = "#282828"
+raised = "#32302f"
+border = "#3c3836"
+text = "#ebdbb2"
+text_muted = "#928374"
+accent = "#fabd2f"
+hover = "#ffffff0d"
+selection = "#83a59855"
+match = "#fabd2f55"
+match_current = "#fe8019aa"

@@ -1,0 +1,14 @@
+name = "Nord"
+dark = true
+
+background = "#2e3440"
+surface = "#3b4252"
+raised = "#434c5e"
+border = "#4c566a"
+text = "#eceff4"
+text_muted = "#8891a3"
+accent = "#88c0d0"
+hover = "#ffffff10"
+selection = "#88c0d055"
+match = "#ebcb8b55"
+match_current = "#d08770aa"

@@ -1,0 +1,187 @@
+import { Theme } from "theme.slint";
+
+export component Panel inherits Rectangle {
+    background: Theme.raised;
+    border-radius: Theme.radius + 2px;
+    border-width: 1px;
+    border-color: Theme.border;
+    drop-shadow-blur: 18px;
+    drop-shadow-color: #00000045;
+}
+
+export component Field inherits TextInput {
+    color: Theme.text;
+    font-size: Theme.font-size;
+    selection-background-color: Theme.selection;
+    vertical-alignment: center;
+    single-line: true;
+}
+
+// Quiet text button, used in the header and popups.
+export component TextButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    in property <length> font-size: Theme.font-size;
+    callback clicked();
+
+    min-width: label.preferred-width + 14px;
+    min-height: 26px;
+    border-radius: Theme.radius;
+    background: touch.has-hover ? Theme.hover : transparent;
+
+    label := Text {
+        text: root.text;
+        color: root.active ? Theme.accent : touch.has-hover ? Theme.text : Theme.text-muted;
+        font-size: root.font-size;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// Bordered button for settings and dialogs.
+export component Button inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    callback clicked();
+
+    height: 30px;
+    width: label.preferred-width + 24px;
+    border-radius: Theme.radius;
+    border-width: root.primary ? 0 : 1px;
+    border-color: Theme.border;
+    background: root.primary ? Theme.accent : touch.has-hover ? Theme.hover : transparent;
+
+    label := Text {
+        text: root.text;
+        color: root.primary ? Theme.background : Theme.text;
+        font-size: Theme.font-size;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component Toggle inherits Rectangle {
+    in property <bool> checked;
+    callback toggled();
+
+    width: 34px;
+    height: 20px;
+    border-radius: self.height / 2;
+    background: root.checked ? Theme.accent : Theme.border;
+
+    Rectangle {
+        x: root.checked ? parent.width - self.width - 3px : 3px;
+        y: 3px;
+        width: parent.height - 6px;
+        height: self.width;
+        border-radius: self.width / 2;
+        background: root.checked ? Theme.background : Theme.text-muted;
+    }
+
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.toggled();
+        }
+    }
+}
+
+// Dropdown: shows the current value; clicking lists the options.
+export component Select inherits Rectangle {
+    in property <[string]> options;
+    in property <string> value;
+    callback selected(string);
+
+    width: 180px;
+    height: 30px;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.border;
+    background: touch.has-hover ? Theme.hover : transparent;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+
+        Text {
+            text: root.value;
+            color: Theme.text;
+            font-size: Theme.font-size;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+        Text {
+            text: "⌄";
+            color: Theme.text-muted;
+            font-size: Theme.font-size;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            popup.show();
+        }
+    }
+
+    popup := PopupWindow {
+        y: root.height + 4px;
+        width: root.width;
+
+        Panel {
+            VerticalLayout {
+                padding: 4px;
+
+                for option in root.options: Rectangle {
+                    height: 28px;
+                    border-radius: Theme.radius - 2px;
+                    background: item.has-hover ? Theme.hover : transparent;
+
+                    Text {
+                        x: 8px;
+                        text: option;
+                        color: option == root.value ? Theme.accent : Theme.text;
+                        font-size: Theme.font-size;
+                    }
+
+                    item := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.selected(option);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// A keyboard shortcut label.
+export component Kbd inherits Rectangle {
+    in property <string> text;
+
+    width: label.preferred-width + 10px;
+    height: 20px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    label := Text {
+        text: root.text;
+        color: Theme.text-muted;
+        font-size: Theme.font-size-small;
+        font-family: "Consolas";
+    }
+}

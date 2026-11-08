@@ -1,0 +1,286 @@
+import { Theme } from "theme.slint";
+import { PageView, ThumbView, RecentItem, TabItem } from "structs.slint";
+import { Button } from "widgets.slint";
+
+// Scrollable column of page thumbnails. Rust positions only those near the
+// viewport.
+export component Sidebar inherits Rectangle {
+    in property <[ThumbView]> thumbs;
+    in property <int> current-page;
+    in property <length> content-height;
+    in-out property <length> viewport-y;
+    callback clicked(int);
+
+    width: Theme.sidebar-width;
+    background: Theme.surface;
+
+    Flickable {
+        content-height: root.content-height;
+        content-y <=> root.viewport-y;
+
+        for thumb in root.thumbs: Rectangle {
+            x: thumb.x;
+            y: thumb.y;
+            width: thumb.width;
+            height: thumb.height;
+            background: thumb.loaded ? transparent : Theme.raised;
+
+            Image {
+                width: parent.width;
+                height: parent.height;
+                source: thumb.image;
+                image-fit: fill;
+            }
+
+            // Selection ring drawn just outside the thumbnail.
+            Rectangle {
+                x: -3px;
+                y: -3px;
+                width: parent.width + 6px;
+                height: parent.height + 6px;
+                border-radius: 3px;
+                border-width: 2px;
+                border-color: thumb.page == root.current-page ? Theme.accent : transparent;
+            }
+
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.clicked(thumb.page);
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        background: Theme.border;
+    }
+}
+
+// Continuous strip of pages. Rust positions only the pages near the
+// viewport, so long documents stay cheap.
+export component ReadingArea inherits Rectangle {
+    in property <[PageView]> pages;
+    in property <length> content-width;
+    in property <length> content-height;
+    in-out property <length> viewport-x;
+    in-out property <length> viewport-y;
+
+    background: Theme.background;
+
+    Flickable {
+        content-width: root.content-width;
+        content-height: root.content-height;
+        content-x <=> root.viewport-x;
+        content-y <=> root.viewport-y;
+
+        for page in root.pages: Rectangle {
+            x: page.x;
+            y: page.y;
+            width: page.width;
+            height: page.height;
+            background: page.loaded ? transparent : Theme.raised;
+
+            Image {
+                width: parent.width;
+                height: parent.height;
+                source: page.image;
+                image-fit: fill;
+            }
+
+            for m in page.marks: Rectangle {
+                x: parent.width * m.x;
+                y: parent.height * m.y;
+                width: parent.width * m.width;
+                height: parent.height * m.height;
+
+                // Highlight and selection: translucent fill.
+                if m.kind == 0 || m.kind == 3: Rectangle {
+                    background: m.kind == 3 ? Theme.selection : m.color.with-alpha(0.38);
+                }
+                // Underline.
+                if m.kind == 1: Rectangle {
+                    y: parent.height - 2px;
+                    height: 2px;
+                    background: m.color;
+                }
+                // Strikethrough.
+                if m.kind == 2: Rectangle {
+                    y: parent.height * 0.52;
+                    height: 2px;
+                    background: m.color;
+                }
+                // Note marker.
+                if m.note: Rectangle {
+                    x: parent.width - 3px;
+                    y: -5px;
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: m.color;
+                    border-width: 1px;
+                    border-color: #00000055;
+                }
+            }
+
+            for h in page.highlights: Rectangle {
+                x: parent.width * h.x;
+                y: parent.height * h.y;
+                width: parent.width * h.width;
+                height: parent.height * h.height;
+                background: h.current ? Theme.match-current : Theme.match;
+            }
+        }
+    }
+}
+
+// Shown when no document is open: a hint, the last session, and recent files.
+export component StartScreen inherits Rectangle {
+    in property <[RecentItem]> recent;
+    in property <string> status;
+    in property <int> session-tabs;
+    callback open-recent(int);
+    callback restore-session();
+
+    background: Theme.background;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: Theme.spacing * 2;
+        width: min(parent.width - 64px, 460px);
+        x: (parent.width - self.width) / 2;
+
+        Text {
+            text: root.status != "" ? root.status : "Open a PDF with Ctrl+O, or press Ctrl+K for everything else";
+            color: Theme.text-muted;
+            font-size: Theme.font-size;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+
+        if root.session-tabs > 0: HorizontalLayout {
+            alignment: center;
+
+            Button {
+                text: root.session-tabs == 1 ? "Restore last session (1 tab)" : "Restore last session (\{root.session-tabs} tabs)";
+                clicked => {
+                    root.restore-session();
+                }
+            }
+        }
+
+        if root.recent.length > 0: VerticalLayout {
+            spacing: 2px;
+
+            Text {
+                text: "Recent";
+                color: Theme.text-muted;
+                font-size: Theme.font-size-small;
+            }
+
+            for item[i] in root.recent: Rectangle {
+                height: 44px;
+                border-radius: Theme.radius;
+                background: touch.has-hover ? Theme.hover : transparent;
+
+                VerticalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    alignment: center;
+
+                    Text {
+                        text: item.title;
+                        color: Theme.text;
+                        font-size: Theme.font-size;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: item.folder;
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size-small;
+                        overflow: elide;
+                    }
+                }
+
+                touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.open-recent(i);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Document tabs, in the header.
+export component TabBar inherits HorizontalLayout {
+    in property <[TabItem]> tabs;
+    callback clicked(int);
+    callback closed(int);
+
+    spacing: 2px;
+    alignment: start;
+
+    for tab[i] in root.tabs: Rectangle {
+        height: 28px;
+        y: (parent.height - self.height) / 2;
+        max-width: 220px;
+        min-width: 60px;
+        preferred-width: tab-row.preferred-width;
+        border-radius: Theme.radius;
+        background: tab.active ? Theme.surface : touch.has-hover ? Theme.hover : transparent;
+        border-width: tab.active ? 1px : 0;
+        border-color: Theme.border;
+
+        touch := TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                root.clicked(i);
+            }
+            pointer-event(event) => {
+                // Middle click closes, like a browser.
+                if event.button == PointerEventButton.middle && event.kind == PointerEventKind.up {
+                    root.closed(i);
+                }
+            }
+        }
+
+        tab-row := HorizontalLayout {
+            padding-left: 10px;
+            padding-right: 4px;
+            spacing: 4px;
+
+            Text {
+                text: tab.title;
+                color: tab.active ? Theme.text : Theme.text-muted;
+                font-size: Theme.font-size;
+                vertical-alignment: center;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+
+            Rectangle {
+                width: 18px;
+                border-radius: 4px;
+                background: close.has-hover ? Theme.hover : transparent;
+                opacity: tab.active || touch.has-hover || close.has-hover ? 1 : 0;
+
+                Text {
+                    text: "×";
+                    color: Theme.text-muted;
+                    font-size: Theme.font-size;
+                }
+
+                close := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.closed(i);
+                    }
+                }
+            }
+        }
+    }
+}

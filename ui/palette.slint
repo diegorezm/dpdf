@@ -1,0 +1,179 @@
+import { Theme } from "theme.slint";
+import { PaletteItem } from "structs.slint";
+import { Panel, Field, Kbd } from "widgets.slint";
+
+// Quick access to every command, open tab, recent file, theme, and page,
+// in the spirit of Zed's and VS Code's command palettes.
+export component Palette inherits Panel {
+    in property <[PaletteItem]> items;
+    in property <int> selected;
+    in-out property <string> query <=> input.text;
+    callback edited(string);
+    callback moved(int);
+    callback accepted();
+    callback item-clicked(int);
+
+    width: 600px;
+    height: layout.preferred-height;
+
+    public function focus-input() {
+        input.focus();
+        input.select-all();
+    }
+
+    layout := VerticalLayout {
+        FocusScope {
+            height: 44px;
+
+            // Arrows and Enter drive the list while typing.
+            capture-key-pressed(event) => {
+                if event.text == Key.DownArrow || (event.modifiers.control && event.text == "n") {
+                    root.moved(1);
+                    return accept;
+                }
+                if event.text == Key.UpArrow || (event.modifiers.control && event.text == "p") {
+                    root.moved(-1);
+                    return accept;
+                }
+                if event.text == Key.Return {
+                    root.accepted();
+                    return accept;
+                }
+                reject
+            }
+
+            Rectangle {
+                height: 44px;
+
+                input := Field {
+                    x: 14px;
+                    width: parent.width - 28px;
+                    font-size: Theme.font-size-large;
+                    edited => {
+                        root.edited(self.text);
+                    }
+                }
+
+                if input.text == "": Text {
+                    x: 14px;
+                    text: "Search commands, tabs, files, themes, or type a page number…";
+                    color: Theme.text-muted;
+                    font-size: Theme.font-size-large;
+                }
+            }
+        }
+
+        Rectangle {
+            height: 1px;
+            background: Theme.border;
+        }
+
+        if root.items.length == 0: Rectangle {
+            height: 40px;
+
+            Text {
+                x: 14px;
+                text: "No matches";
+                color: Theme.text-muted;
+                font-size: Theme.font-size;
+            }
+        }
+
+        VerticalLayout {
+            padding: 4px;
+
+            for item[i] in root.items: Rectangle {
+                height: 32px;
+                border-radius: Theme.radius - 2px;
+                background: i == root.selected ? Theme.hover : transparent;
+
+                if i == root.selected: Rectangle {
+                    x: 0;
+                    width: 2px;
+                    height: parent.height - 12px;
+                    background: Theme.accent;
+                    border-radius: 1px;
+                }
+
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    spacing: 8px;
+
+                    Text {
+                        text: item.title;
+                        color: Theme.text;
+                        font-size: Theme.font-size;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: item.detail;
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size-small;
+                        vertical-alignment: center;
+                        overflow: elide;
+                        horizontal-stretch: 1;
+                    }
+                    if item.keys != "": Kbd {
+                        y: (parent.height - self.height) / 2;
+                        text: item.keys;
+                    }
+                }
+
+                TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.item-clicked(i);
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            height: 1px;
+            background: Theme.border;
+        }
+
+        HorizontalLayout {
+            padding: 8px;
+            padding-left: 14px;
+            padding-right: 14px;
+            spacing: 6px;
+
+            Text {
+                text: "Open";
+                color: Theme.text;
+                font-size: Theme.font-size-small;
+                vertical-alignment: center;
+            }
+            Kbd {
+                text: "Enter";
+            }
+            Rectangle {
+                width: 8px;
+            }
+            Text {
+                text: "Navigate";
+                color: Theme.text;
+                font-size: Theme.font-size-small;
+                vertical-alignment: center;
+            }
+            Kbd {
+                text: "↑↓";
+            }
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+            Text {
+                text: "Close";
+                color: Theme.text;
+                font-size: Theme.font-size-small;
+                vertical-alignment: center;
+            }
+            Kbd {
+                text: "Esc";
+            }
+        }
+    }
+}

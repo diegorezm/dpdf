@@ -1,0 +1,17 @@
+# dpdf theme. Copy this file to %APPDATA%\dpdf\themes\ and edit it to make
+# your own. Colors are #rrggbb or #rrggbbaa. Missing keys fall back to the
+# built-in theme for the same `dark` value.
+name = "Graphite"
+dark = true
+
+background = "#121316"
+surface = "#17181c"
+raised = "#1d1f24"
+border = "#24262b"
+text = "#d7d8dc"
+text_muted = "#6c6f78"
+accent = "#8fa8ff"
+hover = "#ffffff0d"
+selection = "#5b8cff55"
+match = "#f5c54255"
+match_current = "#f59b2a99"

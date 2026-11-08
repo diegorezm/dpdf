@@ -1,0 +1,14 @@
+name = "Paper"
+dark = false
+
+background = "#f6f5f2"
+surface = "#ecebe7"
+raised = "#ffffff"
+border = "#dddbd5"
+text = "#23242a"
+text_muted = "#8a8b90"
+accent = "#3d5bd9"
+hover = "#0000000a"
+selection = "#3d5bd944"
+match = "#f5c54266"
+match_current = "#f59b2aaa"

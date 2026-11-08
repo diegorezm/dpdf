@@ -1,0 +1,66 @@
+// Data passed from Rust to the UI.
+
+// A search match, as fractions of its page.
+export struct Highlight {
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    current: bool,
+}
+
+// One rect of an annotation or the selection, as fractions of its page.
+// kind: 0 highlight, 1 underline, 2 strikethrough, 3 selection.
+export struct Mark {
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    kind: int,
+    color: color,
+    // Draw a note marker at this rect's end.
+    note: bool,
+}
+
+export struct PageView {
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+    image: image,
+    loaded: bool,
+    highlights: [Highlight],
+    marks: [Mark],
+}
+
+export struct ThumbView {
+    page: int,
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+    image: image,
+    loaded: bool,
+}
+
+export struct RecentItem {
+    title: string,
+    folder: string,
+}
+
+export struct TabItem {
+    title: string,
+    active: bool,
+}
+
+export struct PaletteItem {
+    title: string,
+    detail: string,
+    keys: string,
+}
+
+export struct KeyRow {
+    title: string,
+    name: string,
+    keys: string,
+}

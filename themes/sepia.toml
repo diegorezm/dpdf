@@ -1,0 +1,14 @@
+name = "Sepia"
+dark = false
+
+background = "#f1e7d0"
+surface = "#e8dcc0"
+raised = "#f8f0dd"
+border = "#d9caa8"
+text = "#433422"
+text_muted = "#8c7a5e"
+accent = "#a0522d"
+hover = "#4334220f"
+selection = "#a0522d40"
+match = "#e0a92f66"
+match_current = "#d2691eaa"

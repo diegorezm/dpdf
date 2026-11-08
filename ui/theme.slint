@@ -1,17 +1,17 @@
-// Design tokens. Components must read colors and spacing from here.
+// Design tokens. Colors are set from Rust from the active theme file;
+// the values here are only the fallback before that happens.
 export global Theme {
-    in-out property <bool> dark: true;
-
-    out property <color> background: dark ? #121316 : #f6f5f2;
-    out property <color> surface: dark ? #17181c : #ecebe7;
-    out property <color> raised: dark ? #1d1f24 : #ffffff;
-    out property <color> border: dark ? #24262b : #dddbd5;
-    out property <color> text: dark ? #d7d8dc : #23242a;
-    out property <color> text-muted: dark ? #6c6f78 : #8a8b90;
-    out property <color> accent: dark ? #8fa8ff : #3d5bd9;
-    out property <color> hover: dark ? #ffffff0d : #0000000a;
-    out property <color> match: #f5c54255;
-    out property <color> match-current: #f59b2a99;
+    in-out property <color> background: #121316;
+    in-out property <color> surface: #17181c;
+    in-out property <color> raised: #1d1f24;
+    in-out property <color> border: #24262b;
+    in-out property <color> text: #d7d8dc;
+    in-out property <color> text-muted: #6c6f78;
+    in-out property <color> accent: #8fa8ff;
+    in-out property <color> hover: #ffffff0d;
+    in-out property <color> selection: #5b8cff55;
+    in-out property <color> match: #f5c54255;
+    in-out property <color> match-current: #f59b2a99;
 
     out property <length> spacing: 12px;
     out property <length> radius: 6px;
@@ -19,4 +19,5 @@ export global Theme {
     out property <length> sidebar-width: 180px;
     out property <length> font-size: 13px;
     out property <length> font-size-small: 11px;
+    out property <length> font-size-large: 15px;
 }

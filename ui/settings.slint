@@ -1,0 +1,524 @@
+import { Theme } from "theme.slint";
+import { KeyRow } from "structs.slint";
+import { Panel, Toggle, Select, Button, TextButton, Kbd } from "widgets.slint";
+
+component NavItem inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    callback clicked();
+
+    height: 32px;
+    border-radius: Theme.radius;
+    background: root.active ? Theme.hover : touch.has-hover ? Theme.hover : transparent;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        spacing: 10px;
+
+        Rectangle {
+            width: 3px;
+            height: 14px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 1.5px;
+            background: root.active ? Theme.accent : transparent;
+        }
+        Text {
+            text: root.text;
+            color: root.active ? Theme.text : Theme.text-muted;
+            font-size: Theme.font-size;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+component SectionTitle inherits Text {
+    color: Theme.text;
+    font-size: Theme.font-size-large;
+    font-weight: 600;
+}
+
+// A bordered group of rows.
+component Card inherits Rectangle {
+    border-radius: Theme.radius + 2px;
+    border-width: 1px;
+    border-color: Theme.border;
+    background: Theme.surface;
+
+    VerticalLayout {
+        @children
+    }
+}
+
+// One setting: title and description on the left, a control on the right.
+component Row inherits Rectangle {
+    in property <string> title;
+    in property <string> description;
+    in property <bool> last;
+
+    min-height: 60px;
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        padding-top: 12px;
+        padding-bottom: 12px;
+        spacing: Theme.spacing * 2;
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 3px;
+            horizontal-stretch: 1;
+
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: Theme.font-size;
+            }
+            if root.description != "": Text {
+                text: root.description;
+                color: Theme.text-muted;
+                font-size: Theme.font-size-small;
+                wrap: word-wrap;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            @children
+        }
+    }
+
+    if !root.last: Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.border;
+    }
+}
+
+export component SettingsView inherits Panel {
+    in-out property <string> section: "general";
+    in property <[string]> theme-names;
+    in property <string> theme;
+    in property <string> page-colors;
+    in property <string> default-zoom;
+    in property <bool> restore-session;
+    in property <bool> sidebar;
+    in property <bool> vim;
+    in property <[KeyRow]> keys;
+    in property <string> data-dir;
+    in property <string> problems;
+    in property <string> version;
+    // key/value pairs, or commands with an empty value.
+    callback set(string, string);
+    callback close();
+
+    HorizontalLayout {
+        // Navigation.
+        Rectangle {
+            width: 200px;
+            background: Theme.surface;
+            border-radius: Theme.radius + 2px;
+
+            VerticalLayout {
+                padding: 8px;
+                spacing: 2px;
+                alignment: start;
+
+                Text {
+                    text: "Settings";
+                    color: Theme.text-muted;
+                    font-size: Theme.font-size-small;
+                    height: 28px;
+                    vertical-alignment: center;
+                    x: 10px;
+                }
+                NavItem {
+                    text: "General";
+                    active: root.section == "general";
+                    clicked => {
+                        root.section = "general";
+                    }
+                }
+                NavItem {
+                    text: "Appearance";
+                    active: root.section == "appearance";
+                    clicked => {
+                        root.section = "appearance";
+                    }
+                }
+                NavItem {
+                    text: "Reading";
+                    active: root.section == "reading";
+                    clicked => {
+                        root.section = "reading";
+                    }
+                }
+                NavItem {
+                    text: "Keybindings";
+                    active: root.section == "keys";
+                    clicked => {
+                        root.section = "keys";
+                    }
+                }
+                NavItem {
+                    text: "About";
+                    active: root.section == "about";
+                    clicked => {
+                        root.section = "about";
+                    }
+                }
+            }
+
+            Rectangle {
+                x: parent.width - 1px;
+                width: 1px;
+                background: Theme.border;
+            }
+        }
+
+        VerticalLayout {
+            // Breadcrumb bar.
+            Rectangle {
+                height: 48px;
+
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 10px;
+                    spacing: 8px;
+
+                    Text {
+                        text: "Settings  /";
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: root.section == "general" ? "General" : root.section == "appearance" ? "Appearance" : root.section == "reading" ? "Reading" : root.section == "keys" ? "Keybindings" : "About";
+                        color: Theme.text;
+                        font-size: Theme.font-size;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                    TextButton {
+                        y: (parent.height - self.height) / 2;
+                        text: "Restore defaults";
+                        clicked => {
+                            root.set("reset", "");
+                        }
+                    }
+                    TextButton {
+                        y: (parent.height - self.height) / 2;
+                        text: "×";
+                        font-size: Theme.font-size-large;
+                        clicked => {
+                            root.close();
+                        }
+                    }
+                }
+
+                Rectangle {
+                    y: parent.height - 1px;
+                    height: 1px;
+                    background: Theme.border;
+                }
+            }
+
+            Flickable {
+                content-height: body.preferred-height;
+
+                body := VerticalLayout {
+                    padding: 28px;
+                    padding-top: 20px;
+                    spacing: Theme.spacing;
+                    alignment: start;
+
+                    if root.problems != "": Rectangle {
+                        border-radius: Theme.radius;
+                        border-width: 1px;
+                        border-color: Theme.match-current;
+                        height: problem-text.preferred-height + 20px;
+
+                        problem-text := Text {
+                            x: 12px;
+                            width: parent.width - 24px;
+                            text: root.problems;
+                            color: Theme.text;
+                            font-size: Theme.font-size-small;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    if root.section == "general": VerticalLayout {
+                        spacing: Theme.spacing;
+
+                        SectionTitle {
+                            text: "Session";
+                        }
+                        Card {
+                            Row {
+                                title: "Restore last session on startup";
+                                description: "Reopen the tabs you had open, each at the page and zoom you left it.";
+                                Toggle {
+                                    checked: root.restore-session;
+                                    toggled => {
+                                        root.set("restore-session", root.restore-session ? "false" : "true");
+                                    }
+                                }
+                            }
+                            Row {
+                                title: "Restore now";
+                                description: "Bring back the tabs from the last session without restarting.";
+                                last: true;
+                                Button {
+                                    text: "Restore";
+                                    clicked => {
+                                        root.set("restore-session-now", "");
+                                    }
+                                }
+                            }
+                        }
+
+                        SectionTitle {
+                            text: "Files";
+                        }
+                        Card {
+                            Row {
+                                title: "Configuration file";
+                                description: "Every setting here, plus keybindings, lives in config.toml.";
+                                HorizontalLayout {
+                                    spacing: 6px;
+
+                                    Button {
+                                        text: "Open";
+                                        clicked => {
+                                            root.set("open-config", "");
+                                        }
+                                    }
+                                    Button {
+                                        text: "Reload";
+                                        clicked => {
+                                            root.set("reload", "");
+                                        }
+                                    }
+                                }
+                            }
+                            Row {
+                                title: "Data folder";
+                                description: root.data-dir;
+                                last: true;
+                                Button {
+                                    text: "Open";
+                                    clicked => {
+                                        root.set("open-data-dir", "");
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.section == "appearance": VerticalLayout {
+                        spacing: Theme.spacing;
+
+                        SectionTitle {
+                            text: "Theme";
+                        }
+                        Card {
+                            Row {
+                                title: "Theme";
+                                description: "Colors for the whole interface.";
+                                Select {
+                                    options: root.theme-names;
+                                    value: root.theme;
+                                    selected(name) => {
+                                        root.set("theme", name);
+                                    }
+                                }
+                            }
+                            Row {
+                                title: "Custom themes";
+                                description: "Drop .toml files in the themes folder. Copy a built-in theme from the repository's themes/ folder to start.";
+                                last: true;
+                                HorizontalLayout {
+                                    spacing: 6px;
+
+                                    Button {
+                                        text: "Open folder";
+                                        clicked => {
+                                            root.set("open-themes", "");
+                                        }
+                                    }
+                                    Button {
+                                        text: "Reload";
+                                        clicked => {
+                                            root.set("reload", "");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        SectionTitle {
+                            text: "Pages";
+                        }
+                        Card {
+                            Row {
+                                title: "Page colors";
+                                description: "Inverted turns white pages dark, for reading at night.";
+                                last: true;
+                                Select {
+                                    options: ["Original", "Inverted"];
+                                    value: root.page-colors;
+                                    selected(value) => {
+                                        root.set("page-colors", value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.section == "reading": VerticalLayout {
+                        spacing: Theme.spacing;
+
+                        SectionTitle {
+                            text: "Layout";
+                        }
+                        Card {
+                            Row {
+                                title: "Default zoom";
+                                description: "For documents you haven't opened before.";
+                                Select {
+                                    options: ["Fit width", "Fit page"];
+                                    value: root.default-zoom;
+                                    selected(value) => {
+                                        root.set("default-zoom", value);
+                                    }
+                                }
+                            }
+                            Row {
+                                title: "Thumbnail sidebar";
+                                description: "Show page thumbnails next to the document.";
+                                last: true;
+                                Toggle {
+                                    checked: root.sidebar;
+                                    toggled => {
+                                        root.set("sidebar", root.sidebar ? "false" : "true");
+                                    }
+                                }
+                            }
+                        }
+
+                        SectionTitle {
+                            text: "Keyboard";
+                        }
+                        Card {
+                            Row {
+                                title: "Vim keys";
+                                description: "j/k scroll, gg/G first/last page, Ctrl+D/U half screen, / search, n/N matches, : command palette, y copy.";
+                                last: true;
+                                Toggle {
+                                    checked: root.vim;
+                                    toggled => {
+                                        root.set("vim", root.vim ? "false" : "true");
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.section == "keys": VerticalLayout {
+                        spacing: Theme.spacing;
+
+                        HorizontalLayout {
+                            SectionTitle {
+                                text: "Keybindings";
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                            }
+                            Button {
+                                text: "Edit in config.toml";
+                                clicked => {
+                                    root.set("open-config", "");
+                                }
+                            }
+                        }
+                        Text {
+                            text: "Rebind any action under [keys] using the name on the right, e.g.  zoom-in = [\"ctrl+=\", \"z i\"]. An empty list unbinds it.";
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-small;
+                            wrap: word-wrap;
+                        }
+                        Card {
+                            for row[i] in root.keys: Rectangle {
+                                height: 36px;
+
+                                HorizontalLayout {
+                                    padding-left: 16px;
+                                    padding-right: 16px;
+                                    spacing: Theme.spacing;
+
+                                    Text {
+                                        text: row.title;
+                                        color: Theme.text;
+                                        font-size: Theme.font-size;
+                                        vertical-alignment: center;
+                                        horizontal-stretch: 1;
+                                    }
+                                    Text {
+                                        text: row.keys != "" ? row.keys : "—";
+                                        color: row.keys != "" ? Theme.text : Theme.text-muted;
+                                        font-size: Theme.font-size-small;
+                                        font-family: "Consolas";
+                                        vertical-alignment: center;
+                                        horizontal-alignment: right;
+                                    }
+                                    Text {
+                                        width: 150px;
+                                        text: row.name;
+                                        color: Theme.text-muted;
+                                        font-size: Theme.font-size-small;
+                                        font-family: "Consolas";
+                                        vertical-alignment: center;
+                                        horizontal-alignment: right;
+                                    }
+                                }
+
+                                if i < root.keys.length - 1: Rectangle {
+                                    y: parent.height - 1px;
+                                    height: 1px;
+                                    background: Theme.border;
+                                }
+                            }
+                        }
+                    }
+
+                    if root.section == "about": VerticalLayout {
+                        spacing: Theme.spacing;
+
+                        SectionTitle {
+                            text: "dpdf \{root.version}";
+                        }
+                        Card {
+                            Row {
+                                title: "A fast, minimal, local-first PDF reader";
+                                description: "Built with Rust, Slint, and PDFium. MIT licensed.";
+                            }
+                            Row {
+                                title: "Private by design";
+                                description: "No telemetry, no accounts, no network access. Your notes, settings, and history stay in the data folder.";
+                                last: true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
