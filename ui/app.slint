@@ -1,0 +1,116 @@
+import { Theme } from "theme.slint";
+
+component Sidebar inherits Rectangle {
+    width: Theme.sidebar-width;
+    background: Theme.surface;
+
+    VerticalLayout {
+        padding: Theme.spacing;
+        spacing: Theme.spacing;
+        alignment: start;
+
+        for i in 4: Rectangle {
+            height: 120px;
+            border-radius: 3px;
+            background: Theme.page;
+            border-width: 1px;
+            border-color: Theme.border;
+        }
+    }
+
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        background: Theme.border;
+    }
+}
+
+component ReadingArea inherits Rectangle {
+    background: Theme.background;
+
+    Rectangle {
+        width: min(parent.width - 64px, 560px);
+        height: min(parent.height - 48px, self.width * 1.414);
+        background: Theme.page;
+        border-width: 1px;
+        border-color: Theme.border;
+
+        Text {
+            text: "Open a PDF with Ctrl+O";
+            color: Theme.text-muted;
+            font-size: Theme.font-size;
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "dpdf";
+    preferred-width: 1100px;
+    preferred-height: 760px;
+    background: Theme.background;
+
+    in-out property <bool> sidebar-visible: true;
+    in property <string> document-title: "No document";
+    in property <int> current-page: 0;
+    in property <int> page-count: 0;
+
+    callback toggle-sidebar();
+
+    forward-focus: keys;
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.modifiers.control && event.text == "b") {
+                root.toggle-sidebar();
+                return accept;
+            }
+            reject
+        }
+
+        VerticalLayout {
+            // Header
+            Rectangle {
+                height: Theme.header-height;
+                background: Theme.background;
+
+                HorizontalLayout {
+                    padding-left: Theme.spacing * 1.5;
+                    padding-right: Theme.spacing * 1.5;
+                    spacing: Theme.spacing;
+
+                    Text {
+                        text: root.document-title;
+                        color: Theme.text;
+                        font-size: Theme.font-size;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: root.page-count > 0 ? "page \{root.current-page} / \{root.page-count}" : "";
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                    }
+                    Text {
+                        text: "⚙";
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size + 2px;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Rectangle {
+                    y: parent.height - 1px;
+                    height: 1px;
+                    background: Theme.border;
+                }
+            }
+
+            HorizontalLayout {
+                if root.sidebar-visible: Sidebar { }
+                ReadingArea { }
+            }
+        }
+    }
+}

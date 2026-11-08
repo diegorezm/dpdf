@@ -1,0 +1,17 @@
+// Design tokens. Components must read colors and spacing from here.
+export global Theme {
+    in-out property <bool> dark: true;
+
+    out property <color> background: dark ? #121316 : #f6f5f2;
+    out property <color> surface: dark ? #17181c : #ecebe7;
+    out property <color> border: dark ? #24262b : #dddbd5;
+    out property <color> text: dark ? #d7d8dc : #23242a;
+    out property <color> text-muted: dark ? #6c6f78 : #8a8b90;
+    out property <color> accent: dark ? #8fa8ff : #3d5bd9;
+    out property <color> page: dark ? #1d1f24 : #ffffff;
+
+    out property <length> spacing: 12px;
+    out property <length> header-height: 40px;
+    out property <length> sidebar-width: 180px;
+    out property <length> font-size: 13px;
+}
