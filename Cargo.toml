@@ -12,6 +12,11 @@ slint = "1.18"
 # Native "Open file" dialog.
 rfd = "0.18"
 # PDF rendering via PDFium; image crate integration not needed.
+# Config, themes, and annotations are TOML files users can edit by hand.
+serde = { version = "1", features = ["derive"] }
+toml = "1.2"
+# Copy selected text.
+clipboard-win = "5.4"
 pdfium-render = { version = "0.9.5", default-features = false, features = ["pdfium_8125", "thread_safe"] }
 
 [build-dependencies]
