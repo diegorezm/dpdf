@@ -1,0 +1,15 @@
+/target
+**/*.rs.bk
+*.pdb
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Local secrets
+.env
+.env.*
