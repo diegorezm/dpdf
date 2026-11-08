@@ -26,20 +26,26 @@ component Sidebar inherits Rectangle {
 }
 
 component ReadingArea inherits Rectangle {
+    in property <bool> has-page;
+    in property <image> page-image;
+    in property <string> status;
+    // Space available for the rendered page.
+    out property <length> page-width: self.width - 48px;
+    out property <length> page-height: self.height - 32px;
+
     background: Theme.background;
 
-    Rectangle {
-        width: min(parent.width - 64px, 560px);
-        height: min(parent.height - 48px, self.width * 1.414);
-        background: Theme.page;
-        border-width: 1px;
-        border-color: Theme.border;
+    if root.has-page: Image {
+        width: root.page-width;
+        height: root.page-height;
+        source: root.page-image;
+        image-fit: contain;
+    }
 
-        Text {
-            text: "Open a PDF with Ctrl+O";
-            color: Theme.text-muted;
-            font-size: Theme.font-size;
-        }
+    if !root.has-page: Text {
+        text: root.status != "" ? root.status : "Open a PDF with Ctrl+O";
+        color: Theme.text-muted;
+        font-size: Theme.font-size;
     }
 }
 
@@ -54,17 +60,20 @@ export component AppWindow inherits Window {
     in property <int> current-page: 0;
     in property <int> page-count: 0;
 
-    callback toggle-sidebar();
+    in property <bool> has-page;
+    in property <image> page-image;
+    in property <string> status;
+    out property <length> reader-width: reader.page-width;
+    out property <length> reader-height: reader.page-height;
+
+    // Raw key text and Ctrl state; Rust decides what it means.
+    callback key-pressed(string, bool) -> bool;
 
     forward-focus: keys;
 
     keys := FocusScope {
         key-pressed(event) => {
-            if (event.modifiers.control && event.text == "b") {
-                root.toggle-sidebar();
-                return accept;
-            }
-            reject
+            root.key-pressed(event.text, event.modifiers.control) ? accept : reject
         }
 
         VerticalLayout {
@@ -109,7 +118,11 @@ export component AppWindow inherits Window {
 
             HorizontalLayout {
                 if root.sidebar-visible: Sidebar { }
-                ReadingArea { }
+                reader := ReadingArea {
+                    has-page: root.has-page;
+                    page-image: root.page-image;
+                    status: root.status;
+                }
             }
         }
     }
