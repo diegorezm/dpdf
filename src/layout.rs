@@ -103,6 +103,19 @@ pub fn with_margin(range: Range<usize>, margin: usize, count: usize) -> Range<us
     range.start.saturating_sub(margin)..(range.end + margin).min(count)
 }
 
+/// Zoom (relative to fit width) at which a page of `page_size` points fits
+/// entirely in the viewport.
+pub fn fit_page_zoom(page_size: (f32, f32), viewport: (f32, f32)) -> f32 {
+    let (page_w, page_h) = page_size;
+    let fit_width = (viewport.0 - 2.0 * SIDE_MARGIN).max(1.0);
+    if page_w <= 0.0 || page_h <= 0.0 {
+        return 1.0;
+    }
+    let height_at_fit_width = fit_width * page_h / page_w;
+    let available = (viewport.1 - 2.0 * GAP).max(1.0);
+    (available / height_at_fit_width).clamp(MIN_ZOOM, 1.0)
+}
+
 pub fn zoom_in(zoom: f32) -> f32 {
     (zoom * ZOOM_STEP).min(MAX_ZOOM)
 }
@@ -153,6 +166,18 @@ mod tests {
         assert_eq!(layout.content_width(), 448.0);
         assert_eq!(zoom_in(MAX_ZOOM), MAX_ZOOM);
         assert_eq!(zoom_out(MIN_ZOOM), MIN_ZOOM);
+    }
+
+    #[test]
+    fn fit_page() {
+        // Fit width 612 makes the page 792 tall; 400 available => ~0.505.
+        let zoom = fit_page_zoom(
+            (612.0, 792.0),
+            (612.0 + 2.0 * SIDE_MARGIN, 400.0 + 2.0 * GAP),
+        );
+        assert!((zoom - 400.0 / 792.0).abs() < 1e-4);
+        // A wide page already fits at fit width.
+        assert_eq!(fit_page_zoom((800.0, 100.0), (500.0, 800.0)), 1.0);
     }
 
     #[test]

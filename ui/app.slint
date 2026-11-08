@@ -1,20 +1,88 @@
 import { Theme } from "theme.slint";
 
+export { Theme }
+
+// A search match, as fractions of its page.
+export struct Highlight {
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    current: bool,
+}
+
+export struct PageView {
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+    image: image,
+    loaded: bool,
+    highlights: [Highlight],
+}
+
+export struct ThumbView {
+    page: int,
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+    image: image,
+    loaded: bool,
+}
+
+export struct RecentItem {
+    title: string,
+    folder: string,
+}
+
+// Scrollable column of page thumbnails. Rust positions only those near the
+// viewport.
 component Sidebar inherits Rectangle {
+    in property <[ThumbView]> thumbs;
+    in property <int> current-page;
+    in property <length> content-height;
+    in-out property <length> viewport-y;
+    callback clicked(int);
+
     width: Theme.sidebar-width;
     background: Theme.surface;
 
-    VerticalLayout {
-        padding: Theme.spacing;
-        spacing: Theme.spacing;
-        alignment: start;
+    Flickable {
+        content-height: root.content-height;
+        content-y <=> root.viewport-y;
 
-        for i in 4: Rectangle {
-            height: 120px;
-            border-radius: 3px;
-            background: Theme.page;
-            border-width: 1px;
-            border-color: Theme.border;
+        for thumb in root.thumbs: Rectangle {
+            x: thumb.x;
+            y: thumb.y;
+            width: thumb.width;
+            height: thumb.height;
+            background: thumb.loaded ? transparent : Theme.raised;
+
+            Image {
+                width: parent.width;
+                height: parent.height;
+                source: thumb.image;
+                image-fit: fill;
+            }
+
+            // Selection ring drawn just outside the thumbnail.
+            Rectangle {
+                x: -3px;
+                y: -3px;
+                width: parent.width + 6px;
+                height: parent.height + 6px;
+                border-radius: 3px;
+                border-width: 2px;
+                border-color: thumb.page == root.current-page ? Theme.accent : transparent;
+            }
+
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.clicked(thumb.page);
+                }
+            }
         }
     }
 
@@ -25,21 +93,10 @@ component Sidebar inherits Rectangle {
     }
 }
 
-export struct PageView {
-    x: length,
-    y: length,
-    width: length,
-    height: length,
-    image: image,
-    loaded: bool,
-}
-
 // Continuous strip of pages. Rust positions only the pages near the
 // viewport, so long documents stay cheap.
 component ReadingArea inherits Rectangle {
     in property <[PageView]> pages;
-    in property <bool> has-document;
-    in property <string> status;
     in property <length> content-width;
     in property <length> content-height;
     in-out property <length> viewport-x;
@@ -58,7 +115,7 @@ component ReadingArea inherits Rectangle {
             y: page.y;
             width: page.width;
             height: page.height;
-            background: page.loaded ? transparent : Theme.surface;
+            background: page.loaded ? transparent : Theme.raised;
 
             Image {
                 width: parent.width;
@@ -66,28 +123,170 @@ component ReadingArea inherits Rectangle {
                 source: page.image;
                 image-fit: fill;
             }
+
+            for h in page.highlights: Rectangle {
+                x: parent.width * h.x;
+                y: parent.height * h.y;
+                width: parent.width * h.width;
+                height: parent.height * h.height;
+                background: h.current ? Theme.match-current : Theme.match;
+            }
+        }
+    }
+}
+
+// Shown when no document is open: a hint and recently opened files.
+component StartScreen inherits Rectangle {
+    in property <[RecentItem]> recent;
+    in property <string> status;
+    callback open-recent(int);
+
+    background: Theme.background;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: Theme.spacing * 2;
+        width: min(parent.width - 64px, 460px);
+        x: (parent.width - self.width) / 2;
+
+        Text {
+            text: root.status != "" ? root.status : "Open a PDF with Ctrl+O";
+            color: Theme.text-muted;
+            font-size: Theme.font-size;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+
+        if root.recent.length > 0: VerticalLayout {
+            spacing: 2px;
+
+            Text {
+                text: "Recent";
+                color: Theme.text-muted;
+                font-size: Theme.font-size-small;
+            }
+
+            for item[i] in root.recent: Rectangle {
+                height: 44px;
+                border-radius: Theme.radius;
+                background: touch.has-hover ? Theme.hover : transparent;
+
+                VerticalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    alignment: center;
+
+                    Text {
+                        text: item.title;
+                        color: Theme.text;
+                        font-size: Theme.font-size;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: item.folder;
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size-small;
+                        overflow: elide;
+                    }
+                }
+
+                touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.open-recent(i);
+                    }
+                }
+            }
+        }
+    }
+}
+
+component Panel inherits Rectangle {
+    background: Theme.raised;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.border;
+    drop-shadow-blur: 16px;
+    drop-shadow-color: #00000040;
+}
+
+component Field inherits TextInput {
+    color: Theme.text;
+    font-size: Theme.font-size;
+    selection-background-color: Theme.accent.with-alpha(0.35);
+    vertical-alignment: center;
+    single-line: true;
+}
+
+component SettingRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    callback clicked();
+
+    height: 36px;
+    border-radius: Theme.radius;
+    background: touch.has-hover ? Theme.hover : transparent;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+
+        Text {
+            text: root.label;
+            color: Theme.text;
+            font-size: Theme.font-size;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.value;
+            color: Theme.accent;
+            font-size: Theme.font-size;
+            vertical-alignment: center;
+            horizontal-alignment: right;
         }
     }
 
-    if !root.has-document: Text {
-        text: root.status != "" ? root.status : "Open a PDF with Ctrl+O";
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+component ShortcutRow inherits HorizontalLayout {
+    in property <string> keys;
+    in property <string> action;
+
+    padding-left: 10px;
+    padding-right: 10px;
+
+    Text {
+        text: root.action;
         color: Theme.text-muted;
-        font-size: Theme.font-size;
+        font-size: Theme.font-size-small;
+    }
+    Text {
+        text: root.keys;
+        color: Theme.text-muted;
+        font-size: Theme.font-size-small;
+        horizontal-alignment: right;
     }
 }
 
 export component AppWindow inherits Window {
-    title: "dpdf";
+    title: root.page-count > 0 ? "\{root.document-title} — dpdf" : "dpdf";
     preferred-width: 1100px;
     preferred-height: 760px;
     background: Theme.background;
 
     in-out property <bool> sidebar-visible: true;
-    in property <string> document-title: "No document";
+    in property <bool> fullscreen;
+    in property <string> document-title;
     in property <int> current-page: 0;
     in property <int> page-count: 0;
-
     in property <string> status;
+
     in property <[PageView]> pages;
     in property <length> content-width;
     in property <length> content-height;
@@ -96,31 +295,67 @@ export component AppWindow inherits Window {
     out property <length> reader-width: reader.width;
     out property <length> reader-height: reader.height;
 
+    in property <[ThumbView]> thumbs;
+    in property <length> thumbs-content-height;
+    in-out property <length> thumbs-viewport-y;
+
+    in property <[RecentItem]> recent;
+
+    // "", "search", "goto", or "settings".
+    in property <string> overlay;
+    in-out property <string> search-text <=> search-input.text;
+    in property <string> search-status;
+    in-out property <string> goto-text <=> goto-input.text;
+    in property <bool> light-theme;
+    in property <bool> sidebar-default;
+
+    // Raw key text and modifiers; Rust decides what it means.
+    callback key-pressed(string, bool, bool) -> bool;
     callback scrolled();
     callback resized();
+    callback thumbs-scrolled();
+    callback thumb-clicked(int);
+    callback open-recent(int);
+    callback search-edited(string);
+    callback search-step(bool);
+    callback goto-accepted(string);
+    callback settings-clicked();
+    callback toggle-theme();
+    callback toggle-sidebar-default();
+
     changed viewport-y => { root.scrolled(); }
     changed reader-width => { root.resized(); }
     changed reader-height => { root.scrolled(); }
+    changed thumbs-viewport-y => { root.thumbs-scrolled(); }
 
-    // Raw key text and Ctrl state; Rust decides what it means.
-    callback key-pressed(string, bool) -> bool;
+    // Moves keyboard focus to the open overlay, or back to the reader.
+    public function focus-overlay() {
+        if root.overlay == "search" {
+            search-input.focus();
+            search-input.select-all();
+        } else if root.overlay == "goto" {
+            goto-input.focus();
+            goto-input.select-all();
+        } else {
+            keys.focus();
+        }
+    }
 
     forward-focus: keys;
 
     keys := FocusScope {
         key-pressed(event) => {
-            root.key-pressed(event.text, event.modifiers.control) ? accept : reject
+            root.key-pressed(event.text, event.modifiers.control, event.modifiers.shift) ? accept : reject
         }
 
         VerticalLayout {
-            // Header
-            Rectangle {
+            if !root.fullscreen: Rectangle {
                 height: Theme.header-height;
                 background: Theme.background;
 
                 HorizontalLayout {
                     padding-left: Theme.spacing * 1.5;
-                    padding-right: Theme.spacing * 1.5;
+                    padding-right: Theme.spacing;
                     spacing: Theme.spacing;
 
                     Text {
@@ -129,20 +364,31 @@ export component AppWindow inherits Window {
                         font-size: Theme.font-size;
                         vertical-alignment: center;
                         overflow: elide;
+                        horizontal-stretch: 1;
                     }
                     Text {
-                        text: root.status != "" && root.page-count > 0 ? root.status
-                            : root.page-count > 0 ? "page \{root.current-page} / \{root.page-count}" : "";
+                        text: root.page-count == 0 ? "" : root.status != "" ? root.status : "page \{root.current-page} / \{root.page-count}";
                         color: Theme.text-muted;
                         font-size: Theme.font-size;
                         vertical-alignment: center;
-                        horizontal-alignment: right;
                     }
-                    Text {
-                        text: "⚙";
-                        color: Theme.text-muted;
-                        font-size: Theme.font-size + 2px;
-                        vertical-alignment: center;
+                    Rectangle {
+                        width: 28px;
+                        border-radius: Theme.radius;
+                        background: gear.has-hover ? Theme.hover : transparent;
+
+                        Text {
+                            text: "⚙";
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size + 2px;
+                        }
+
+                        gear := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.settings-clicked();
+                            }
+                        }
                     }
                 }
 
@@ -154,15 +400,174 @@ export component AppWindow inherits Window {
             }
 
             HorizontalLayout {
-                if root.sidebar-visible: Sidebar { }
-                reader := ReadingArea {
-                    pages: root.pages;
-                    has-document: root.page-count > 0;
-                    status: root.status;
-                    content-width: root.content-width;
-                    content-height: root.content-height;
-                    viewport-x <=> root.viewport-x;
-                    viewport-y <=> root.viewport-y;
+                if root.sidebar-visible && !root.fullscreen && root.page-count > 0: Sidebar {
+                    thumbs: root.thumbs;
+                    current-page: root.current-page - 1;
+                    content-height: root.thumbs-content-height;
+                    viewport-y <=> root.thumbs-viewport-y;
+                    clicked(page) => {
+                        root.thumb-clicked(page);
+                    }
+                }
+
+                reader := Rectangle {
+                    ReadingArea {
+                        pages: root.pages;
+                        content-width: root.content-width;
+                        content-height: root.content-height;
+                        viewport-x <=> root.viewport-x;
+                        viewport-y <=> root.viewport-y;
+                    }
+
+                    if root.page-count == 0: StartScreen {
+                        recent: root.recent;
+                        status: root.status;
+                        open-recent(i) => {
+                            root.open-recent(i);
+                        }
+                    }
+
+                    // Search: a small floating bar, top right.
+                    Panel {
+                        visible: root.overlay == "search";
+                        x: parent.width - self.width - Theme.spacing;
+                        y: Theme.spacing;
+                        width: 320px;
+                        height: 40px;
+
+                        FocusScope {
+                            // Enter / Shift+Enter step through matches.
+                            capture-key-pressed(event) => {
+                                if event.text == Key.Return {
+                                    root.search-step(!event.modifiers.shift);
+                                    return accept;
+                                }
+                                reject
+                            }
+
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: Theme.spacing;
+
+                                search-input := Field {
+                                    horizontal-stretch: 1;
+                                    edited => {
+                                        root.search-edited(self.text);
+                                    }
+                                }
+                                Text {
+                                    text: root.search-status;
+                                    color: Theme.text-muted;
+                                    font-size: Theme.font-size-small;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        if search-input.text == "": Text {
+                            x: 12px;
+                            text: "Search";
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size;
+                        }
+                    }
+
+                    // Jump to page: centered near the top.
+                    Panel {
+                        visible: root.overlay == "goto";
+                        x: (parent.width - self.width) / 2;
+                        y: parent.height * 0.2;
+                        width: 220px;
+                        height: 44px;
+
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 14px;
+                            spacing: 8px;
+
+                            Text {
+                                text: "Page";
+                                color: Theme.text-muted;
+                                font-size: Theme.font-size;
+                                vertical-alignment: center;
+                            }
+                            goto-input := Field {
+                                horizontal-stretch: 1;
+                                input-type: number;
+                                accepted => {
+                                    root.goto-accepted(self.text);
+                                }
+                            }
+                            Text {
+                                text: "/ \{root.page-count}";
+                                color: Theme.text-muted;
+                                font-size: Theme.font-size;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    // Settings.
+                    if root.overlay == "settings": Panel {
+                        x: (parent.width - self.width) / 2;
+                        y: max(Theme.spacing, (parent.height - self.height) / 3);
+                        width: 340px;
+                        height: settings-layout.preferred-height;
+
+                        settings-layout := VerticalLayout {
+                            padding: Theme.spacing;
+                            spacing: 2px;
+
+                            Text {
+                                text: "Settings";
+                                color: Theme.text;
+                                font-size: Theme.font-size + 2px;
+                                font-weight: 600;
+                            }
+                            Rectangle {
+                                height: Theme.spacing / 2;
+                            }
+
+                            SettingRow {
+                                label: "Theme";
+                                value: root.light-theme ? "Light" : "Dark";
+                                clicked => {
+                                    root.toggle-theme();
+                                }
+                            }
+                            SettingRow {
+                                label: "Thumbnail sidebar";
+                                value: root.sidebar-default ? "Shown" : "Hidden";
+                                clicked => {
+                                    root.toggle-sidebar-default();
+                                }
+                            }
+
+                            Rectangle {
+                                height: Theme.spacing;
+                            }
+                            Text {
+                                text: "Shortcuts";
+                                color: Theme.text-muted;
+                                font-size: Theme.font-size-small;
+                            }
+                            Rectangle {
+                                height: 4px;
+                            }
+                            ShortcutRow { action: "Open"; keys: "Ctrl+O"; }
+                            ShortcutRow { action: "Search (Enter / Shift+Enter)"; keys: "Ctrl+F"; }
+                            ShortcutRow { action: "Go to page"; keys: "Ctrl+P"; }
+                            ShortcutRow { action: "Zoom in / out / reset"; keys: "Ctrl+ +  −  0"; }
+                            ShortcutRow { action: "Fit width / fit page"; keys: "Ctrl+1 / Ctrl+2"; }
+                            ShortcutRow { action: "Toggle sidebar"; keys: "Ctrl+B"; }
+                            ShortcutRow { action: "Previous / next page"; keys: "← →  PgUp PgDn"; }
+                            ShortcutRow { action: "First / last page"; keys: "Home / End"; }
+                            ShortcutRow { action: "Fullscreen"; keys: "F11"; }
+                            ShortcutRow { action: "Settings"; keys: "Ctrl+,"; }
+                            ShortcutRow { action: "Close / exit fullscreen"; keys: "Esc"; }
+                        }
+                    }
                 }
             }
         }
