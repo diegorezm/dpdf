@@ -6,7 +6,7 @@ A fast, minimal, local-first PDF reader for Windows, built with Rust and Slint.
 
 dpdf is a calm, keyboard-first reading environment: the page fills the screen, and controls stay hidden until you need them. There is no telemetry, no accounts, and no network access.
 
-> **Status:** early. You can open a PDF, scroll through it continuously, and zoom; thumbnails, search, and remembering your place are next.
+> **Status:** early but usable. Continuous scrolling, zoom and fit modes, page thumbnails, text search, jump to page, a light theme, and remembered reading positions all work.
 
 ## Requirements
 
@@ -38,14 +38,22 @@ cargo build --release                       # optimized binary: target/release/d
 | Shortcut | Action |
 |---|---|
 | `Ctrl+O` | Open PDF |
-| `Ctrl+B` | Toggle sidebar |
+| `Ctrl+F` | Search (`Enter` / `Shift+Enter` for next / previous match) |
+| `Ctrl+P` | Go to page |
+| `Ctrl++` / `Ctrl+-` | Zoom in / out |
+| `Ctrl+0` / `Ctrl+1` | Fit width |
+| `Ctrl+2` | Fit page |
+| `Ctrl+B` | Toggle thumbnail sidebar |
 | `Left` / `PageUp` | Previous page |
 | `Right` / `PageDown` | Next page |
 | `Home` / `End` | First / last page |
-| `Ctrl++` / `Ctrl+-` | Zoom in / out |
-| `Ctrl+0` | Reset zoom (fit width) |
+| `F11` | Fullscreen |
+| `Ctrl+,` | Settings |
+| `Esc` | Close overlay / exit fullscreen |
 
-Mouse wheel scrolls. More shortcuts are planned (search, jump to page); see [AGENTS.md](AGENTS.md).
+## Your data
+
+Settings, recent files, and the last page and zoom of each document are stored in `%APPDATA%\dpdf\state.txt`. Nothing is sent anywhere.
 
 ## Contributing
 

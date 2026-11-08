@@ -99,7 +99,10 @@ Rejected by default:
 | `Ctrl+P` | Jump to page |
 | `Ctrl++` / `Ctrl+-` | Zoom in / out |
 | `Ctrl+0` | Reset zoom |
+| `Ctrl+1` / `Ctrl+2` | Fit width / fit page |
 | `Ctrl+B` | Toggle sidebar |
+| `Ctrl+,` | Settings |
+| `F11` | Fullscreen |
 | `Left` / `PageUp` | Previous page |
 | `Right` / `PageDown` | Next page |
 | `Home` / `End` | First / last page |
@@ -129,17 +132,19 @@ src/
   layout.rs      // pure page-strip geometry: positions, visible range, zoom
   pdf.rs         // PDFium worker thread: open, render (no Slint types)
   keymap.rs      // key event -> Action mapping
-  nav.rs         // pure page navigation
+  nav.rs         // pure page navigation and page-number parsing
+  search.rs      // pure search results and match navigation
+  store.rs       // settings + reading history, %APPDATA%\dpdf\state.txt
 ui/
   app.slint      // main window and components
   theme.slint    // design tokens (global Theme)
 ```
 
-Planned as they're needed: `settings/` (load/save config), `search`, a thumbnail cache.
+The PDF worker processes one small unit at a time (page render > search one page > thumbnail) and checks for new requests between units, so new requests replace stale work.
 
 Rules:
 - `.slint` files expose properties and callbacks; they contain no business logic beyond trivial layout/visibility bindings.
-- `pdf`, `layout`, `nav`, `keymap` (and future `settings`, `search`) must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs` and `viewer.rs` convert between domain types and Slint types (`slint::Image`, models).
+- `pdf`, `layout`, `nav`, `keymap` `search`, `store` must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs` and `viewer.rs` convert between domain types and Slint types (`slint::Image`, models).
 - State flows one way: UI callback → `Action` → controller updates state → controller pushes properties to UI.
 - Paths: use the per-user Windows dirs — settings and state in `%APPDATA%\dpdf`, caches in `%LOCALAPPDATA%\dpdf`. Never write next to the executable or in the document folder.
 - Grow the module tree when needed; do not create empty modules ahead of time.
