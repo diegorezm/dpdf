@@ -34,7 +34,12 @@ fn provide_pdfium() -> Result<(), String> {
     if !dll.exists() {
         download(&cache_dir)?;
     }
-    fs::copy(&dll, profile_dir.join("pdfium.dll")).map_err(|e| e.to_string())?;
+    let dest = profile_dir.join("pdfium.dll");
+    // Skip when already in place: the DLL is locked while dpdf is running.
+    let size = |p: &Path| fs::metadata(p).map(|m| m.len()).ok();
+    if size(&dest).is_none() || size(&dest) != size(&dll) {
+        fs::copy(&dll, dest).map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
