@@ -124,21 +124,22 @@ Rejected by default:
 
 ```text
 src/
-  main.rs        // entry: build UI, wire callbacks, run event loop
-  app/           // application state, actions, controller (pure where possible)
-  pdf/           // PDFium wrapper: open, render, text, search (no UI types)
-  render/        // worker thread, request queue, page/thumbnail caches
-  settings/      // load/save config (per-user app data dir), defaults, validation
+  main.rs        // entry: build UI, wire callbacks, route worker events
+  viewer.rs      // UI glue: layout + render results -> Slint properties, cache policy
+  layout.rs      // pure page-strip geometry: positions, visible range, zoom
+  pdf.rs         // PDFium worker thread: open, render (no Slint types)
   keymap.rs      // key event -> Action mapping
+  nav.rs         // pure page navigation
 ui/
-  app.slint      // main window, composes components
+  app.slint      // main window and components
   theme.slint    // design tokens (global Theme)
-  components/    // small reusable pieces (sidebar, reader, overlays)
 ```
+
+Planned as they're needed: `settings/` (load/save config), `search`, a thumbnail cache.
 
 Rules:
 - `.slint` files expose properties and callbacks; they contain no business logic beyond trivial layout/visibility bindings.
-- `pdf/`, `render/`, `settings/`, `app/` must not depend on Slint types, so they are unit-testable. Only `main.rs` (or a thin `ui` glue module) converts between domain types and Slint types (`slint::Image`, models).
+- `pdf`, `layout`, `nav`, `keymap` (and future `settings`, `search`) must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs` and `viewer.rs` convert between domain types and Slint types (`slint::Image`, models).
 - State flows one way: UI callback → `Action` → controller updates state → controller pushes properties to UI.
 - Paths: use the per-user Windows dirs — settings and state in `%APPDATA%\dpdf`, caches in `%LOCALAPPDATA%\dpdf`. Never write next to the executable or in the document folder.
 - Grow the module tree when needed; do not create empty modules ahead of time.
