@@ -57,10 +57,17 @@ PDFium is loaded at runtime as `pdfium.dll`, first from the executable's directo
 
 ## 6. Intentionally deferred (or rejected)
 
+Built after the MVP, because they serve the core use (studying documents):
+- Tabs and session restore (tmux-like: reopen every tab where you left it).
+- Annotations (highlight, underline, strikethrough, notes) stored outside the PDF, with Markdown export.
+- Focus mode, command palette, TOML themes and keybindings, optional vim keys.
+
+Customizability is part of dpdf's identity: themes and keys are plain files, and every action is reachable from the palette. New options still have to earn their place; prefer a file-only option over another visible control.
+
 Deferred — may come later, must stay optional, local, and non-intrusive:
-- Annotations/highlights, bookmarks UI, outline/TOC panel.
+- Bookmarks UI, outline/TOC panel, an annotations list panel.
 - Page manipulation (merge, split, rotate, extract) via `lopdf`.
-- Tabs / multiple documents, presentation mode, custom keybindings.
+- Presentation mode, writing annotations into the PDF itself.
 
 Rejected by default:
 - Permanent toolbars, ribbons, sidebar-heavy layouts.
@@ -85,30 +92,18 @@ Rejected by default:
 - Dark-first, restrained palette; light theme is a peer, not an afterthought.
 - Generous spacing, subtle 1px borders, no gradients/shadows-as-decoration.
 - The reading area dominates. The sidebar is optional and collapsible.
-- Overlays (search, jump-to-page, settings) appear on demand and dismiss with `Esc`.
+- Overlays (search, jump-to-page, palette, note editor, settings) appear on demand and dismiss with `Esc`.
 - One accent color, used sparingly (focus, current page, search hits).
-- Design tokens (colors, spacing, font sizes) live in one place: `ui/theme.slint`. Never hard-code colors in components.
+- Design tokens live in `ui/theme.slint`; colors are set from the active theme file (`themes/*.toml`, `config.rs`). Never hard-code colors in components; add a theme key instead (and to every built-in theme).
 - Anti-clutter rule: before adding a visible control, ask whether a shortcut or an on-demand overlay would do. Default answer is yes.
 
 ## 8. Keyboard-first behavior
 
-| Shortcut | Action |
-|---|---|
-| `Ctrl+O` | Open PDF |
-| `Ctrl+F` | Search |
-| `Ctrl+P` | Jump to page |
-| `Ctrl++` / `Ctrl+-` / `Ctrl`+wheel | Zoom in / out |
-| `Ctrl+0` | Reset zoom |
-| `Ctrl+1` / `Ctrl+2` | Fit width / fit page |
-| `Ctrl+B` | Toggle sidebar |
-| `Ctrl+,` | Settings |
-| `F11` | Fullscreen |
-| `Left` / `PageUp` | Previous page |
-| `Right` / `PageDown` | Next page |
-| `Home` / `End` | First / last page |
-| `Esc` | Close overlay / exit fullscreen |
+Bindings are data, not code: `DEFAULT_KEYS` and `VIM_KEYS` in `src/keymap.rs`, overridable per action in `config.toml` under `[keys]`. Every `Action` has a stable kebab-case name (used in config) and a title (used in the palette and Settings). Multi-key sequences (`g g`) are supported.
 
-(`Cmd` replaces `Ctrl` on macOS if it is ever supported.) Every new user-facing action needs a shortcut or a clear reason why not. Shortcut mapping should be a pure, testable function (key event → `Action`), not logic scattered across UI files.
+Core defaults: `Ctrl+O` open, `Ctrl+K` palette, `Ctrl+F` search, `Ctrl+P` go to page, `Ctrl++/-/0` zoom, `Ctrl+1/2` fit width/page, `Ctrl+B` sidebar, `Ctrl+.` focus mode, `F11` fullscreen, `Ctrl+Tab`/`Ctrl+W` tabs, arrows/PgUp/PgDn/Home/End navigation, `Ctrl+C/H/N` copy/highlight/note, `Esc` close/clear.
+
+(`Cmd` replaces `Ctrl` on macOS if it is ever supported.) Every new user-facing action gets an `Action` variant (so it is bindable and in the palette) and, usually, a default key.
 
 ## 9. Performance and resource expectations
 
@@ -127,26 +122,37 @@ Rejected by default:
 
 ```text
 src/
-  main.rs        // entry: build UI, wire callbacks, route worker events
-  viewer.rs      // UI glue: layout + render results -> Slint properties, cache policy
-  layout.rs      // pure page-strip geometry: positions, visible range, zoom
-  pdf.rs         // PDFium worker thread: open, render (no Slint types)
-  keymap.rs      // key event -> Action mapping
-  nav.rs         // pure page navigation and page-number parsing
-  search.rs      // pure search results and match navigation
-  store.rs       // settings + reading history, %APPDATA%\dpdf\state.txt
+  main.rs         // entry: build UI, wire callbacks to App, route worker events
+  app.rs          // tabs + session, keys -> actions, palette, settings, themes, overlays
+  viewer.rs       // the open document: layout, render cache, search, selection, annotations
+  pdf.rs          // PDFium worker thread: open, render, search, select text (no Slint types)
+  layout.rs       // pure page-strip geometry, zoom modes
+  keymap.rs       // actions, key chords and sequences, default + vim bindings
+  palette.rs      // pure fuzzy matching for the command palette
+  search.rs       // pure search results and match navigation
+  annotations.rs  // annotation model, TOML storage, Markdown export
+  config.rs       // config.toml + theme files
+  store.rs        // reading history and last session (state.txt)
+  nav.rs          // pure page navigation and page-number parsing
 ui/
-  app.slint      // main window and components
-  theme.slint    // design tokens (global Theme)
+  app.slint       // main window: header, tabs, reader, overlays
+  reader.slint    // page strip, thumbnails sidebar, start screen, tab bar
+  palette.slint   // command palette
+  settings.slint  // settings sheet
+  widgets.slint   // small shared components (buttons, toggle, select, panel)
+  structs.slint   // data passed from Rust
+  theme.slint     // design tokens (global Theme, colors set from Rust)
+themes/           // built-in themes, embedded at compile time
 ```
 
-The PDF worker processes one small unit at a time (page render > search one page > thumbnail) and checks for new requests between units, so new requests replace stale work.
+The PDF worker processes one small unit at a time (text selection > page render > search one page > thumbnail) and checks for new requests between units, so new requests replace stale work. Tabs share one live document: switching tabs reopens the file and restores its page and zoom, which keeps memory flat no matter how many tabs are open.
 
 Rules:
 - `.slint` files expose properties and callbacks; they contain no business logic beyond trivial layout/visibility bindings.
-- `pdf`, `layout`, `nav`, `keymap` `search`, `store` must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs` and `viewer.rs` convert between domain types and Slint types (`slint::Image`, models).
+- `pdf`, `layout`, `nav`, `keymap`, `palette`, `search`, `annotations`, `config`, `store` must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs`, `app.rs`, and `viewer.rs` touch Slint types.
 - State flows one way: UI callback → `Action` → controller updates state → controller pushes properties to UI.
-- Paths: use the per-user Windows dirs — settings and state in `%APPDATA%\dpdf`, caches in `%LOCALAPPDATA%\dpdf`. Never write next to the executable or in the document folder.
+- Paths: everything user-owned lives in `%APPDATA%\dpdf` (`config.toml`, `themes\`, `annotations\`, `state.txt`); caches go in `%LOCALAPPDATA%\dpdf`. Never write next to the executable, in the document folder, or into the PDF.
+- User files must never block startup: parse leniently, fall back to defaults, and report problems in Settings.
 - Grow the module tree when needed; do not create empty modules ahead of time.
 
 ## 11. Coding standards

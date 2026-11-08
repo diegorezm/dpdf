@@ -4,9 +4,16 @@
 
 A fast, minimal, local-first PDF reader for Windows, built with Rust and Slint.
 
-dpdf is a calm, keyboard-first reading environment: the page fills the screen, and controls stay hidden until you need them. There is no telemetry, no accounts, and no network access.
+dpdf is a calm, keyboard-first reading environment: the page fills the screen, and controls stay hidden until you need them. It is built to be customized: themes and keybindings are plain TOML files. There is no telemetry, no accounts, and no network access.
 
-> **Status:** early but usable. Continuous scrolling, zoom and fit modes, page thumbnails, text search, jump to page, a light theme, and remembered reading positions all work.
+## Features
+
+- **Reading:** continuous scrolling, fit width / fit page / custom zoom (also `Ctrl`+wheel), thumbnails, go to page, fullscreen, and a **focus mode** that hides everything but the page.
+- **Tabs and sessions:** open several PDFs at once. dpdf reopens your last session (every tab, at the page and zoom you left it), like reattaching to tmux.
+- **Annotations:** select text to highlight it (5 colors), underline, strike through, attach a note, or copy it. **Export your notes as Markdown.** Notes are stored next to your settings; the PDF is never modified.
+- **Search:** in-document text search with match highlighting.
+- **Command palette** (`Ctrl+K`): every command, open tab, recent file, and theme, with fuzzy matching. Type a number to jump to that page.
+- **Customizable:** themes and keybindings in TOML, optional **vim keys**, inverted page colors for night reading.
 
 ## Requirements
 
@@ -16,8 +23,8 @@ dpdf is a calm, keyboard-first reading environment: the page fills the screen, a
 ## Run
 
 ```sh
-cargo run                    # then Ctrl+O to pick a file
-cargo run -- path/to/doc.pdf # or open one directly
+cargo run                      # then Ctrl+O to pick files
+cargo run -- a.pdf b.pdf       # or open some directly, one tab each
 ```
 
 PDF rendering uses [PDFium](https://pdfium.googlesource.com/pdfium/). The first build downloads a prebuilt `pdfium.dll` (from [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries)) using the `curl` and `tar` that ship with Windows, caches it in `target/pdfium/`, and copies it next to `dpdf.exe`. The app itself never uses the network.
@@ -35,27 +42,61 @@ cargo build --release                       # optimized binary: target/release/d
 
 ## Shortcuts
 
+The defaults. All of them can be changed (see [Customizing](#customizing)), and Settings → Keybindings lists every action.
+
 | Shortcut | Action |
 |---|---|
-| `Ctrl+O` | Open PDF |
+| `Ctrl+O` | Open PDFs (in new tabs) |
+| `Ctrl+K` / `Ctrl+Shift+P` | Command palette |
 | `Ctrl+F` | Search (`Enter` / `Shift+Enter` for next / previous match) |
 | `Ctrl+P` | Go to page |
 | `Ctrl++` / `Ctrl+-` / `Ctrl`+wheel | Zoom in / out |
-| `Ctrl+0` / `Ctrl+1` | Fit width |
-| `Ctrl+2` | Fit page |
-
-Fit width, fit page, and the zoom level are also in the header. The fit modes follow the window as it resizes.
+| `Ctrl+0` or `Ctrl+1` / `Ctrl+2` | Fit width / fit page |
 | `Ctrl+B` | Toggle thumbnail sidebar |
-| `Left` / `PageUp` | Previous page |
-| `Right` / `PageDown` | Next page |
-| `Home` / `End` | First / last page |
+| `Ctrl+.` | Focus mode |
 | `F11` | Fullscreen |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` / `Ctrl+W` | Next / previous / close tab |
+| `←` `→` `PgUp` `PgDn` / `↑` `↓` | Previous / next page / scroll |
+| `Home` / `End` | First / last page |
+| `Ctrl+C` / `Ctrl+H` / `Ctrl+N` | Copy / highlight / add a note to the selection |
+| `Ctrl+Shift+E` | Export notes as Markdown |
 | `Ctrl+,` | Settings |
-| `Esc` | Close overlay / exit fullscreen |
+| `Esc` | Close overlay, clear selection, leave fullscreen or focus mode |
 
-## Your data
+With **vim keys** on: `j` `k` `h` `l` scroll, `Ctrl+D` / `Ctrl+U` half screen, `J` / `K` next / previous page, `gg` / `G` first / last page, `/` search, `n` / `N` next / previous match, `:` palette, `gt` / `gT` tabs, `zi` `zo` `zw` `zp` zoom, `y` copy, `t` sidebar.
 
-Settings, recent files, and the last page and zoom of each document are stored in `%APPDATA%\dpdf\state.txt`. Nothing is sent anywhere.
+## Customizing
+
+Everything lives in `%APPDATA%\dpdf\` (Settings → General → Data folder):
+
+| File | What |
+|---|---|
+| `config.toml` | Preferences and keybindings. Settings writes here too. |
+| `themes\*.toml` | Your themes. Start from any file in this repo's [`themes/`](themes) folder. |
+| `annotations\*.toml` | Highlights and notes, one file per document. |
+| `state.txt` | Recent files, reading positions, and the last session. |
+
+Keybindings in `config.toml`:
+
+```toml
+vim = true
+
+[keys]
+open = ["ctrl+o"]
+first-page = ["home", "g g"]   # sequences are space-separated
+search = []                     # an empty list unbinds
+```
+
+A theme:
+
+```toml
+name = "My Theme"
+dark = true             # missing colors fall back to the built-in dark theme
+background = "#101418"
+accent = "#ff9e64"
+```
+
+After editing, run **Reload config and themes** from the palette.
 
 ## Contributing
 
