@@ -140,7 +140,7 @@ Rules:
 - `.slint` files expose properties and callbacks; they contain no business logic beyond trivial layout/visibility bindings.
 - `pdf/`, `render/`, `settings/`, `app/` must not depend on Slint types, so they are unit-testable. Only `main.rs` (or a thin `ui` glue module) converts between domain types and Slint types (`slint::Image`, models).
 - State flows one way: UI callback → `Action` → controller updates state → controller pushes properties to UI.
-- Paths: use the per-user Windows dirs — settings and state in `%APPDATA%dpdf`, caches in `%LOCALAPPDATA%dpdf`. Never write next to the executable or in the document folder.
+- Paths: use the per-user Windows dirs — settings and state in `%APPDATA%\dpdf`, caches in `%LOCALAPPDATA%\dpdf`. Never write next to the executable or in the document folder.
 - Grow the module tree when needed; do not create empty modules ahead of time.
 
 ## 11. Coding standards
