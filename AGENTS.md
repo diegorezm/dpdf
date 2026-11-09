@@ -147,7 +147,7 @@ ui/
 themes/           // built-in themes, embedded at compile time
 ```
 
-The PDF worker processes one small unit at a time (text selection > page render > search one page > thumbnail) and checks for new requests between units, so new requests replace stale work. Tabs share one live document: switching tabs reopens the file and restores its page and zoom, which keeps memory flat no matter how many tabs are open.
+The PDF worker processes one small unit at a time (text selection > page render > search one page > thumbnail) and checks for new requests between units, so new requests replace stale work. Tabs share one live document view. The worker keeps the last few documents open and the viewer keeps their exact scroll position and nearby rendered pages, so switching between recent tabs is instant; older tabs reopen from disk, which keeps memory bounded no matter how many tabs are open.
 
 Rules:
 - `.slint` files expose properties and callbacks; they contain no business logic beyond trivial layout/visibility bindings.
