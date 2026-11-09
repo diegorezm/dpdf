@@ -842,7 +842,7 @@ impl App {
                 width_px,
                 bitmap,
             } => self.viewer.rendered(window, page, width_px, bitmap),
-            Event::Thumbnail { page, bitmap } => self.viewer.thumbnail(window, page, bitmap),
+            Event::Thumbnail { page, bitmap } => self.viewer.thumbnail(page, bitmap),
             Event::SearchHits { id, page, matches } => {
                 self.viewer.search_hits(window, id, page, matches)
             }

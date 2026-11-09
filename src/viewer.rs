@@ -7,7 +7,9 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use slint::{Color, ComponentHandle, Image, ModelRc, Rgb8Pixel, SharedPixelBuffer, VecModel};
+use slint::{
+    Color, ComponentHandle, Image, Model, ModelRc, Rgb8Pixel, SharedPixelBuffer, VecModel,
+};
 
 use crate::annotations::{self, Annotations, History, Kind};
 use crate::config::{parse_color, DefaultZoom};
@@ -450,12 +452,28 @@ impl Viewer {
         }
         self.cache
             .insert(page, (width_px, Image::from_rgb8(bitmap)));
-        self.refresh(window);
+        // Only this page's item changes; rebuilding them all would recreate
+        // every page's image, highlight, and mark items.
+        let row = self
+            .shown_pages
+            .as_ref()
+            .filter(|shown| shown.contains(&page))
+            .map(|shown| page - shown.start);
+        if let (Some(row), Some(view)) = (row, self.page_view(window, page)) {
+            self.pages.set_row_data(row, view);
+        }
     }
 
-    pub fn thumbnail(&mut self, window: &AppWindow, page: usize, bitmap: PageBuffer) {
+    pub fn thumbnail(&mut self, page: usize, bitmap: PageBuffer) {
         self.thumb_cache.insert(page, Image::from_rgb8(bitmap));
-        self.refresh_thumbs(window);
+        let row = self
+            .shown_thumbs
+            .as_ref()
+            .filter(|shown| shown.contains(&page))
+            .map(|shown| page - shown.start);
+        if let (Some(row), Some(view)) = (row, self.thumb_view(page)) {
+            self.thumbs.set_row_data(row, view);
+        }
     }
 
     /// Recomputes page positions after a resize, zoom, or new document.
@@ -573,22 +591,7 @@ impl Viewer {
             return;
         }
         self.shown_thumbs = Some(preload.clone());
-        let views: Vec<ThumbView> = preload
-            .clone()
-            .filter_map(|page| {
-                let rect = self.thumb_layout.rect(page)?;
-                let image = self.thumb_cache.get(&page).cloned();
-                Some(ThumbView {
-                    page: ui_int(page),
-                    x: rect.x,
-                    y: rect.y,
-                    width: rect.width,
-                    height: rect.height,
-                    loaded: image.is_some(),
-                    image: image.unwrap_or_default(),
-                })
-            })
-            .collect();
+        let views: Vec<ThumbView> = preload.clone().filter_map(|p| self.thumb_view(p)).collect();
         self.thumbs.set_vec(views);
 
         if self.last_thumb_request.as_ref() != Some(&preload) {
@@ -602,6 +605,20 @@ impl Viewer {
             self.worker.send(Request::Thumbnails { pages, width_px });
             self.last_thumb_request = Some(preload);
         }
+    }
+
+    fn thumb_view(&self, page: usize) -> Option<ThumbView> {
+        let rect = self.thumb_layout.rect(page)?;
+        let image = self.thumb_cache.get(&page).cloned();
+        Some(ThumbView {
+            page: ui_int(page),
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+            loaded: image.is_some(),
+            image: image.unwrap_or_default(),
+        })
     }
 
     pub fn sidebar_shown(&mut self, window: &AppWindow) {
@@ -1365,25 +1382,27 @@ impl Viewer {
     }
 
     fn page_views(&self, window: &AppWindow, pages: Range<usize>) -> Vec<PageView> {
+        pages
+            .filter_map(|page| self.page_view(window, page))
+            .collect()
+    }
+
+    fn page_view(&self, window: &AppWindow, page: usize) -> Option<PageView> {
         let scale = window.window().scale_factor();
         // Snap to physical pixels so a 1:1 render isn't resampled into blur.
         let snap = |v: f32| (v * scale).round() / scale;
-        pages
-            .filter_map(|page| {
-                let rect = self.layout.rect(page)?;
-                let image = self.cache.get(&page).map(|(_, img)| img.clone());
-                Some(PageView {
-                    x: snap(rect.x),
-                    y: snap(rect.y),
-                    width: snap(rect.width),
-                    height: snap(rect.height),
-                    loaded: image.is_some(),
-                    image: image.unwrap_or_default(),
-                    highlights: self.highlights(page),
-                    marks: self.marks(page),
-                })
-            })
-            .collect()
+        let rect = self.layout.rect(page)?;
+        let image = self.cache.get(&page).map(|(_, img)| img.clone());
+        Some(PageView {
+            x: snap(rect.x),
+            y: snap(rect.y),
+            width: snap(rect.width),
+            height: snap(rect.height),
+            loaded: image.is_some(),
+            image: image.unwrap_or_default(),
+            highlights: self.highlights(page),
+            marks: self.marks(page),
+        })
     }
 
     fn highlights(&self, page: usize) -> ModelRc<Highlight> {
