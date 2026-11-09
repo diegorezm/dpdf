@@ -58,7 +58,7 @@ PDFium is loaded at runtime as `pdfium.dll`, first from the executable's directo
 ## 6. Intentionally deferred (or rejected)
 
 Built after the MVP, because they serve the core use (studying documents):
-- Tabs and session restore (tmux-like: reopen every tab where you left it).
+- Tabs and named sessions (tmux-like: each session has its own tabs; dpdf reattaches to the last one on startup).
 - Annotations (highlight, underline, strikethrough, notes) stored outside the PDF, with Markdown export.
 - Focus mode, command palette, TOML themes and keybindings, optional vim keys.
 

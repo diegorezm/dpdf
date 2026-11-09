@@ -11,6 +11,7 @@ pub enum Target {
     Recent(PathBuf),
     GoToPage(usize),
     Theme(String),
+    Session(usize),
 }
 
 #[derive(Debug, Clone, PartialEq)]

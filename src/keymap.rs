@@ -60,7 +60,11 @@ actions! {
     NextTab => "next-tab", "Next tab";
     PreviousTab => "previous-tab", "Previous tab";
     CloseTab => "close-tab", "Close tab";
-    RestoreSession => "restore-session", "Restore last session";
+    Home => "home", "Go to home screen";
+    SwitchSession => "switch-session", "Switch session…";
+    NewSession => "new-session", "New session…";
+    RenameSession => "rename-session", "Rename session…";
+    DeleteSession => "delete-session", "Delete session";
     Copy => "copy", "Copy selected text";
     Highlight => "highlight", "Highlight selection";
     AddNote => "add-note", "Add note to selection";
@@ -98,6 +102,9 @@ const DEFAULT_KEYS: &[(Action, &str)] = &[
     (Action::NextTab, "ctrl+tab"),
     (Action::PreviousTab, "ctrl+shift+tab"),
     (Action::CloseTab, "ctrl+w"),
+    (Action::Home, "alt+home"),
+    (Action::SwitchSession, "ctrl+shift+s"),
+    (Action::NewSession, "ctrl+shift+n"),
     (Action::Copy, "ctrl+c"),
     (Action::Highlight, "ctrl+h"),
     (Action::AddNote, "ctrl+n"),

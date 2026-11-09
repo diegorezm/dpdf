@@ -97,8 +97,19 @@ fn main() -> Result<(), slint::PlatformError> {
         .go_to_page(&win, index(page)));
     on!(window.on_open_recent, |app, win, i| app
         .open_recent(&win, index(i)));
-    on!(window.on_restore_session_clicked, |app, win| app
-        .restore_session(&win));
+    on!(window.on_open_session, |app, win, i| app
+        .switch_session(&win, index(i)));
+    on!(window.on_prompt_accepted, |app, win, text| app
+        .prompt_accepted(&win, &text));
+    on!(window.on_header_action, |app, win, action| {
+        let action = match action.as_str() {
+            "home" => Action::Home,
+            "sessions" => Action::SwitchSession,
+            "new-session" => Action::NewSession,
+            _ => Action::Open,
+        };
+        app.run(&win, action)
+    });
     on!(window.on_search_edited, |app, win, text| app
         .viewer()
         .search_edited(&win, &text));

@@ -9,7 +9,7 @@ dpdf is a calm, keyboard-first reading environment: the page fills the screen, a
 ## Features
 
 - **Reading:** continuous scrolling, fit width / fit page / custom zoom (also `Ctrl`+wheel), thumbnails, go to page, fullscreen, and a **focus mode** that hides everything but the page.
-- **Tabs and sessions:** open several PDFs at once. dpdf reopens your last session (every tab, at the page and zoom you left it), like reattaching to tmux.
+- **Tabs and sessions:** open several PDFs at once. Group them into named sessions, like tmux: one for your thesis, one for a course. Switch with `Ctrl+Shift+S`; dpdf reattaches to the last session on startup, each tab at the page and zoom you left it.
 - **Annotations:** select text to highlight it (5 colors), underline, strike through, attach a note, or copy it. **Export your notes as Markdown.** Notes are stored next to your settings; the PDF is never modified.
 - **Search:** in-document text search with match highlighting.
 - **Command palette** (`Ctrl+K`): every command, open tab, recent file, and theme, with fuzzy matching. Type a number to jump to that page.
@@ -56,6 +56,8 @@ The defaults. All of them can be changed (see [Customizing](#customizing)), and 
 | `Ctrl+.` | Focus mode |
 | `F11` | Fullscreen |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` / `Ctrl+W` | Next / previous / close tab |
+| `Alt+Home` | Home screen (tabs stay open) |
+| `Ctrl+Shift+S` / `Ctrl+Shift+N` | Switch session / new session |
 | `←` `→` `PgUp` `PgDn` / `↑` `↓` | Previous / next page / scroll |
 | `Home` / `End` | First / last page |
 | `Ctrl+C` / `Ctrl+H` / `Ctrl+N` | Copy / highlight / add a note to the selection |
@@ -74,7 +76,7 @@ Everything lives in `%APPDATA%\dpdf\` (Settings → General → Data folder):
 | `config.toml` | Preferences and keybindings. Settings writes here too. |
 | `themes\*.toml` | Your themes. Start from any file in this repo's [`themes/`](themes) folder. |
 | `annotations\*.toml` | Highlights and notes, one file per document. |
-| `state.txt` | Recent files, reading positions, and the last session. |
+| `state.txt` | Recent files, reading positions, and sessions with their tabs. |
 
 Font, keybindings, and more in `config.toml`:
 

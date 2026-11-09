@@ -1,6 +1,6 @@
 import { Theme } from "theme.slint";
 import { PageView, ThumbView, RecentItem, TabItem } from "structs.slint";
-import { Button } from "widgets.slint";
+import { Button, Icon } from "widgets.slint";
 
 // Scrollable column of page thumbnails. Rust positions only those near the
 // viewport.
@@ -140,9 +140,11 @@ export component ReadingArea inherits Rectangle {
 export component StartScreen inherits Rectangle {
     in property <[RecentItem]> recent;
     in property <string> status;
-    in property <int> session-tabs;
+    in property <[RecentItem]> sessions;
+    in property <string> session-name;
     callback open-recent(int);
-    callback restore-session();
+    callback open-session(int);
+    callback new-session();
 
     background: Theme.background;
 
@@ -160,13 +162,74 @@ export component StartScreen inherits Rectangle {
             wrap: word-wrap;
         }
 
-        if root.session-tabs > 0: HorizontalLayout {
-            alignment: center;
+        VerticalLayout {
+            spacing: 2px;
 
-            Button {
-                text: root.session-tabs == 1 ? "Restore last session (1 tab)" : "Restore last session (\{root.session-tabs} tabs)";
-                clicked => {
-                    root.restore-session();
+            HorizontalLayout {
+                Text {
+                    text: "Sessions";
+                    color: Theme.text-muted;
+                    font-size: Theme.font-size-small;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                Rectangle {
+                    width: new-label.preferred-width + 12px;
+                    height: 22px;
+                    border-radius: Theme.radius;
+                    background: new-touch.has-hover ? Theme.hover : transparent;
+
+                    new-label := Text {
+                        text: "+ New session";
+                        color: Theme.accent;
+                        font-size: Theme.font-size-small;
+                    }
+
+                    new-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.new-session();
+                        }
+                    }
+                }
+            }
+
+            for session[i] in root.sessions: Rectangle {
+                height: 40px;
+                border-radius: Theme.radius;
+                background: session.title == root.session-name ? Theme.hover : session-touch.has-hover ? Theme.hover : transparent;
+
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    spacing: 10px;
+
+                    Icon {
+                        y: (parent.height - self.height) / 2;
+                        name: "session";
+                        color: session.title == root.session-name ? Theme.accent : Theme.text-muted;
+                    }
+                    Text {
+                        text: session.title;
+                        color: Theme.text;
+                        font-size: Theme.font-size;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: session.folder;
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size-small;
+                        vertical-alignment: center;
+                    }
+                }
+
+                session-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.open-session(i);
+                    }
                 }
             }
         }
@@ -251,8 +314,15 @@ export component TabBar inherits HorizontalLayout {
         tab-row := HorizontalLayout {
             padding-left: 10px;
             padding-right: 4px;
-            spacing: 4px;
+            spacing: 6px;
 
+            Icon {
+                y: (parent.height - self.height) / 2;
+                width: 14px;
+                height: 14px;
+                name: "pdf";
+                color: tab.active ? Theme.accent : Theme.text-muted;
+            }
             Text {
                 text: tab.title;
                 color: tab.active ? Theme.text : Theme.text-muted;

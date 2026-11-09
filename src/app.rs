@@ -13,12 +13,20 @@ use crate::config::{
 use crate::keymap::{Action, Chord, KeyResult, Keymap};
 use crate::palette::{self, Entry, Target};
 use crate::pdf::{Event, Worker};
-use crate::store::Store;
+use crate::store::{unique_name, Session, Store, DEFAULT_SESSION};
 use crate::titlebar;
 use crate::viewer::{file_name, to_color, ui_int, PopupOutcome, Viewer};
-use crate::{AppWindow, KeyRow, PaletteItem, SettingsWindow, TabItem, Theme, ThemeCard};
+use crate::{
+    AppWindow, KeyRow, PaletteItem, RecentItem, SettingsWindow, TabItem, Theme, ThemeCard,
+};
 
 const PALETTE_LIMIT: usize = 12;
+
+#[derive(Clone, Copy)]
+enum Prompt {
+    NewSession,
+    RenameSession,
+}
 
 pub struct App {
     viewer: Viewer,
@@ -34,6 +42,9 @@ pub struct App {
     tabs: Vec<PathBuf>,
     active: Option<usize>,
     tab_items: Rc<VecModel<TabItem>>,
+    session_items: Rc<VecModel<RecentItem>>,
+    /// What the name prompt is asking for.
+    prompt: Option<Prompt>,
 
     palette_entries: Vec<Entry>,
     palette_shown: Vec<Entry>,
@@ -46,7 +57,9 @@ impl App {
         let store = Store::load();
         let tab_items = Rc::new(VecModel::default());
         let palette_items = Rc::new(VecModel::default());
+        let session_items = Rc::new(VecModel::default());
         window.set_tabs(tab_items.clone().into());
+        window.set_sessions(session_items.clone().into());
         window.set_palette_items(palette_items.clone().into());
         settings.set_version(env!("CARGO_PKG_VERSION").into());
         settings.set_data_dir(
@@ -67,6 +80,8 @@ impl App {
             tabs: Vec::new(),
             active: None,
             tab_items,
+            session_items,
+            prompt: None,
             palette_entries: Vec::new(),
             palette_shown: Vec::new(),
             palette_selected: 0,
@@ -74,10 +89,8 @@ impl App {
         };
         app.reload_config(window);
         window.set_sidebar_visible(app.config.sidebar);
-        window.set_session_tabs(ui_int(app.viewer.store.session.len()));
-        if app.config.restore_session {
-            app.restore_session(window);
-        }
+        // Attach to the last session, like `tmux attach`.
+        app.load_session(window, app.config.restore_session);
         app
     }
 
@@ -265,10 +278,6 @@ impl App {
                 }
                 return;
             }
-            "restore-session-now" => {
-                self.set_overlay(window, "");
-                return self.restore_session(window);
-            }
             _ => return,
         }
         self.save_config(window);
@@ -334,7 +343,14 @@ impl App {
                     self.close_tab(window, active);
                 }
             }
-            Action::RestoreSession => self.restore_session(window),
+            Action::Home => self.go_home(window),
+            Action::SwitchSession => self.open_session_picker(window),
+            Action::NewSession => self.ask_name(window, Prompt::NewSession, ""),
+            Action::RenameSession => {
+                let name = self.session_name().to_owned();
+                self.ask_name(window, Prompt::RenameSession, &name);
+            }
+            Action::DeleteSession => self.delete_session(window),
             Action::Copy | Action::Highlight | Action::AddNote => {
                 let outcome = self.viewer.selection_action(window, action);
                 self.popup_outcome(window, outcome);
@@ -490,27 +506,153 @@ impl App {
         self.tabs_changed(window);
     }
 
-    pub fn restore_session(&mut self, window: &AppWindow) {
-        let session: Vec<PathBuf> = self
-            .viewer
-            .store
-            .session
-            .iter()
-            .filter(|p| p.exists())
+    /// Back to the home screen; the tabs stay open.
+    pub fn go_home(&mut self, window: &AppWindow) {
+        self.viewer.close(window);
+        self.active = None;
+        self.tabs_changed(window);
+    }
+
+    // ----- Sessions --------------------------------------------------------
+
+    fn session_name(&self) -> &str {
+        let store = &self.viewer.store;
+        store
+            .sessions
+            .get(store.current_session)
+            .map_or(DEFAULT_SESSION, |s| s.name.as_str())
+    }
+
+    /// Shows the current session's tabs, reopening its active one if `open`.
+    fn load_session(&mut self, window: &AppWindow, open: bool) {
+        let store = &self.viewer.store;
+        let session = store
+            .sessions
+            .get(store.current_session)
             .cloned()
-            .collect();
-        let active = self.viewer.store.active_tab;
-        let first_new = self.tabs.len();
-        for path in session {
-            if !self.tabs.iter().any(|t| same_file(t, &path)) {
-                self.tabs.push(path);
+            .unwrap_or_else(|| Session::new(DEFAULT_SESSION));
+        self.tabs = session.tabs.into_iter().filter(|p| p.exists()).collect();
+        self.active = None;
+        match session.active.filter(|&a| open && a < self.tabs.len()) {
+            Some(active) => self.activate(window, active),
+            None => {
+                self.viewer.close(window);
+                self.tabs_changed(window);
             }
         }
-        if self.tabs.is_empty() {
+    }
+
+    pub fn switch_session(&mut self, window: &AppWindow, index: usize) {
+        let store = &self.viewer.store;
+        if index == store.current_session || index >= store.sessions.len() {
             return;
         }
-        let target = (first_new + active).min(self.tabs.len() - 1);
-        self.activate(window, target);
+        self.tabs_changed(window);
+        self.viewer.store.current_session = index;
+        self.load_session(window, true);
+        let message = format!("Session: {}", self.session_name());
+        self.flash(window, &message);
+    }
+
+    fn new_session(&mut self, window: &AppWindow, name: &str) {
+        self.tabs_changed(window);
+        let store = &mut self.viewer.store;
+        let name = unique_name(&store.sessions, name);
+        store.sessions.push(Session::new(&name));
+        store.current_session = store.sessions.len() - 1;
+        self.load_session(window, false);
+    }
+
+    fn rename_session(&mut self, window: &AppWindow, name: &str) {
+        let store = &mut self.viewer.store;
+        let current = store.current_session;
+        let others: Vec<Session> = store
+            .sessions
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != current)
+            .map(|(_, s)| s.clone())
+            .collect();
+        if let Some(session) = store.sessions.get_mut(current) {
+            session.name = unique_name(&others, name);
+        }
+        self.tabs_changed(window);
+    }
+
+    fn delete_session(&mut self, window: &AppWindow) {
+        let store = &mut self.viewer.store;
+        if store.sessions.len() <= 1 {
+            self.flash(window, "The only session can't be deleted");
+            return;
+        }
+        let removed = store.sessions.remove(store.current_session);
+        store.current_session = store.current_session.min(store.sessions.len() - 1);
+        self.load_session(window, true);
+        self.flash(window, &format!("Deleted session {}", removed.name));
+    }
+
+    fn ask_name(&mut self, window: &AppWindow, prompt: Prompt, initial: &str) {
+        self.prompt = Some(prompt);
+        window.set_prompt_label(
+            match prompt {
+                Prompt::NewSession => "New session",
+                Prompt::RenameSession => "Rename session",
+            }
+            .into(),
+        );
+        window.set_prompt_text(initial.into());
+        self.set_overlay(window, "prompt");
+    }
+
+    pub fn prompt_accepted(&mut self, window: &AppWindow, text: &str) {
+        self.set_overlay(window, "");
+        match self.prompt.take() {
+            Some(Prompt::NewSession) => self.new_session(window, text),
+            Some(Prompt::RenameSession) => self.rename_session(window, text),
+            None => {}
+        }
+    }
+
+    fn open_session_picker(&mut self, window: &AppWindow) {
+        self.palette_entries = self.session_entries();
+        self.palette_entries.push(Entry {
+            target: Target::Command(Action::NewSession),
+            title: "New session…".to_owned(),
+            detail: String::new(),
+            keys: self
+                .keymap
+                .keys_for(Action::NewSession)
+                .into_iter()
+                .next()
+                .unwrap_or_default(),
+        });
+        window.set_palette_query("".into());
+        self.palette_edited(window, "");
+        // Start on the session after the current one, like the tmux chooser.
+        let current = self.viewer.store.current_session;
+        self.palette_selected = (current + 1) % self.viewer.store.sessions.len().max(1);
+        self.update_palette(window);
+        self.set_overlay(window, "palette");
+    }
+
+    fn session_entries(&self) -> Vec<Entry> {
+        let store = &self.viewer.store;
+        store
+            .sessions
+            .iter()
+            .enumerate()
+            .map(|(i, s)| Entry {
+                target: Target::Session(i),
+                title: format!("Session: {}", s.name),
+                detail: session_detail(s, i == store.current_session),
+                keys: String::new(),
+            })
+            .collect()
+    }
+
+    fn flash(&self, window: &AppWindow, message: &str) {
+        window.set_status(message.into());
+        clear_status_later(window);
     }
 
     fn tabs_changed(&mut self, window: &AppWindow) {
@@ -519,28 +661,32 @@ impl App {
             .iter()
             .enumerate()
             .map(|(i, path)| TabItem {
-                title: path
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_default()
-                    .into(),
+                title: file_name(path).into(),
                 active: Some(i) == self.active,
             })
             .collect();
         self.tab_items.set_vec(items);
 
         let store = &mut self.viewer.store;
-        // An empty tab list keeps the last session around to restore later.
-        if !self.tabs.is_empty() {
-            store.session = self.tabs.clone();
-            store.active_tab = self.active.unwrap_or(0);
-            let _ = store.save();
+        let current = store.current_session;
+        if let Some(session) = store.sessions.get_mut(current) {
+            session.tabs = self.tabs.clone();
+            session.active = self.active;
         }
-        window.set_session_tabs(if self.tabs.is_empty() {
-            ui_int(self.viewer.store.session.len())
-        } else {
-            0
-        });
+        let _ = store.save();
+
+        let sessions: Vec<RecentItem> = store
+            .sessions
+            .iter()
+            .enumerate()
+            .map(|(i, s)| RecentItem {
+                title: s.name.as_str().into(),
+                folder: session_detail(s, i == current).into(),
+            })
+            .collect();
+        self.session_items.set_vec(sessions);
+        window.set_session_name(self.session_name().into());
+        window.set_home(self.active.is_none());
     }
 
     // ----- Worker events ---------------------------------------------------
@@ -667,6 +813,7 @@ impl App {
                     .unwrap_or_default(),
             });
         }
+        entries.extend(self.session_entries());
         for theme in &self.themes {
             entries.push(Entry {
                 target: Target::Theme(theme.name.clone()),
@@ -738,6 +885,7 @@ impl App {
             Target::Recent(path) => self.open_path(window, path),
             Target::GoToPage(page) => self.viewer.go_to_page(window, page),
             Target::Theme(name) => self.setting(window, "theme", &name),
+            Target::Session(i) => self.switch_session(window, i),
         }
     }
 
@@ -765,7 +913,7 @@ impl App {
 /// Words each settings section answers to, for the settings search box:
 /// general, reading, theme, appearance, keybindings, files.
 const SECTION_WORDS: [&str; 6] = [
-    "general session restore startup tabs",
+    "general session sessions restore startup tabs attach",
     "reading zoom fit width page default sidebar thumbnails vim keyboard",
     "theme themes colors dark light custom",
     "appearance page colors inverted night dark",
@@ -784,6 +932,18 @@ fn matching_sections(query: &str) -> [bool; 6] {
     });
     shown[4] |= action_match;
     shown
+}
+
+fn session_detail(session: &Session, current: bool) -> String {
+    let tabs = match session.tabs.len() {
+        1 => "1 tab".to_owned(),
+        n => format!("{n} tabs"),
+    };
+    if current {
+        format!("{tabs} · current")
+    } else {
+        tabs
+    }
 }
 
 fn opaque(color: slint::Color) -> slint::Color {

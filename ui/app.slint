@@ -1,6 +1,6 @@
 import { Theme } from "theme.slint";
 import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard } from "structs.slint";
-import { Panel, Field, TextButton } from "widgets.slint";
+import { Panel, Field, TextButton, Icon } from "widgets.slint";
 import { Sidebar, ReadingArea, StartScreen, TabBar } from "reader.slint";
 import { Palette } from "palette.slint";
 import { SettingsView } from "settings.slint";
@@ -45,9 +45,13 @@ export component AppWindow inherits Window {
 
     // Start screen.
     in property <[RecentItem]> recent;
-    in property <int> session-tabs;
+    in property <[RecentItem]> sessions;
+    in property <string> session-name: "main";
+    in property <bool> home: true;
 
-    // Overlays: "", "search", "goto", "palette", or "note".
+    // Overlays: "", "search", "goto", "palette", "prompt", or "note".
+    in property <string> prompt-label;
+    in-out property <string> prompt-text <=> prompt-input.text;
     in property <string> overlay;
     in-out property <string> search-text <=> search-input.text;
     in property <string> search-status;
@@ -72,7 +76,10 @@ export component AppWindow inherits Window {
     callback thumbs-scrolled();
     callback thumb-clicked(int);
     callback open-recent(int);
-    callback restore-session-clicked();
+    callback open-session(int);
+    callback prompt-accepted(string);
+    // "home", "open", "sessions", or "new-session".
+    callback header-action(string);
     callback search-edited(string);
     callback search-step(bool);
     callback goto-accepted(string);
@@ -108,6 +115,9 @@ export component AppWindow inherits Window {
             goto-input.select-all();
         } else if root.overlay == "palette" {
             palette.focus-input();
+        } else if root.overlay == "prompt" {
+            prompt-input.focus();
+            prompt-input.select-all();
         } else if root.overlay == "note" {
             note-input.focus();
         } else {
@@ -134,18 +144,120 @@ export component AppWindow inherits Window {
                     padding-right: Theme.spacing;
                     spacing: Theme.spacing;
 
-                    if root.tabs.length > 0: TabBar {
+                    HorizontalLayout {
                         horizontal-stretch: 1;
-                        tabs: root.tabs;
-                        clicked(i) => {
-                            root.tab-clicked(i);
+                        spacing: 4px;
+
+                        // Current session, like tmux's status line.
+                        Rectangle {
+                            y: (parent.height - self.height) / 2;
+                            height: 28px;
+                            width: session-row.preferred-width + 16px;
+                            border-radius: Theme.radius;
+                            background: session-touch.has-hover ? Theme.hover : transparent;
+
+                            session-row := HorizontalLayout {
+                                x: 8px;
+                                spacing: 6px;
+
+                                Icon {
+                                    y: (parent.height - self.height) / 2;
+                                    name: "session";
+                                    color: Theme.accent;
+                                }
+                                Text {
+                                    text: root.session-name;
+                                    color: Theme.text;
+                                    font-size: Theme.font-size;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            session-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.header-action("sessions");
+                                }
+                            }
                         }
-                        closed(i) => {
-                            root.tab-closed(i);
+
+                        Rectangle {
+                            width: 1px;
+                            height: 18px;
+                            y: (parent.height - self.height) / 2;
+                            background: Theme.border;
                         }
-                    }
-                    if root.tabs.length == 0: Rectangle {
-                        horizontal-stretch: 1;
+
+                        // Home.
+                        Rectangle {
+                            y: (parent.height - self.height) / 2;
+                            width: 30px;
+                            height: 28px;
+                            border-radius: Theme.radius;
+                            background: root.home ? Theme.surface : home-touch.has-hover ? Theme.hover : transparent;
+                            border-width: root.home ? 1px : 0;
+                            border-color: Theme.border;
+
+                            Icon {
+                                name: "home";
+                                color: root.home ? Theme.accent : Theme.text-muted;
+                            }
+
+                            home-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.header-action("home");
+                                }
+                            }
+                        }
+
+                        TabBar {
+                            horizontal-stretch: 0;
+                            tabs: root.tabs;
+                            clicked(i) => {
+                                root.tab-clicked(i);
+                            }
+                            closed(i) => {
+                                root.tab-closed(i);
+                            }
+                        }
+
+                        // Open another PDF in a new tab.
+                        Rectangle {
+                            y: (parent.height - self.height) / 2;
+                            height: 28px;
+                            width: open-row.preferred-width + 20px;
+                            border-radius: Theme.radius;
+                            background: open-touch.has-hover ? Theme.hover : transparent;
+
+                            open-row := HorizontalLayout {
+                                x: 10px;
+                                spacing: 6px;
+
+                                Icon {
+                                    y: (parent.height - self.height) / 2;
+                                    name: "plus";
+                                    color: open-touch.has-hover ? Theme.text : Theme.text-muted;
+                                }
+                                Text {
+                                    text: "Open";
+                                    color: open-touch.has-hover ? Theme.text : Theme.text-muted;
+                                    font-size: Theme.font-size;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            open-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.header-action("open");
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            horizontal-stretch: 1;
+                        }
                     }
 
                     if root.page-count > 0: HorizontalLayout {
@@ -270,12 +382,44 @@ export component AppWindow inherits Window {
                     if root.page-count == 0: StartScreen {
                         recent: root.recent;
                         status: root.status;
-                        session-tabs: root.session-tabs;
+                        sessions: root.sessions;
+                        session-name: root.session-name;
                         open-recent(i) => {
                             root.open-recent(i);
                         }
-                        restore-session => {
-                            root.restore-session-clicked();
+                        open-session(i) => {
+                            root.open-session(i);
+                        }
+                        new-session => {
+                            root.header-action("new-session");
+                        }
+                    }
+
+                    // Name prompt (new or renamed session).
+                    Panel {
+                        visible: root.overlay == "prompt";
+                        x: (parent.width - self.width) / 2;
+                        y: parent.height * 0.2;
+                        width: 320px;
+                        height: 44px;
+
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 14px;
+                            spacing: 10px;
+
+                            Text {
+                                text: root.prompt-label;
+                                color: Theme.text-muted;
+                                font-size: Theme.font-size;
+                                vertical-alignment: center;
+                            }
+                            prompt-input := Field {
+                                horizontal-stretch: 1;
+                                accepted => {
+                                    root.prompt-accepted(self.text);
+                                }
+                            }
                         }
                     }
 
