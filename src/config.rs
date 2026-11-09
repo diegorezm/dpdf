@@ -97,6 +97,8 @@ pub struct Config {
     pub sidebar: bool,
     /// Header button that reopens the closed sidebar.
     pub sidebar_button: bool,
+    /// Ask GitHub for a newer release on startup.
+    pub check_updates: bool,
     /// Interface font family, e.g. "Segoe UI Variable Text" or "Inter".
     pub font: String,
     /// Interface font size in logical pixels.
@@ -123,6 +125,7 @@ impl Default for Config {
             restore_session: true,
             sidebar: true,
             sidebar_button: true,
+            check_updates: true,
             font: "Segoe UI Variable Text".to_owned(),
             font_size: 14.0,
             density: Density::Comfortable,

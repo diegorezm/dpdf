@@ -77,6 +77,7 @@ actions! {
     ReloadConfig => "reload-config", "Reload config and themes";
     OpenConfig => "open-config", "Open config.toml";
     OpenThemesFolder => "open-themes-folder", "Open themes folder";
+    CheckForUpdates => "check-for-updates", "Check for updates";
     Escape => "escape", "Close overlay / clear selection";
 }
 

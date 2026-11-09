@@ -4,7 +4,7 @@
 
 A fast, minimal, local-first PDF reader for Windows, built with Rust and Slint.
 
-dpdf is a calm, keyboard-first reading environment: the page fills the screen, and controls stay hidden until you need them. It is built to be customized: themes and keybindings are plain TOML files. There is no telemetry, no accounts, and no network access.
+dpdf is a calm, keyboard-first reading environment: the page fills the screen, and controls stay hidden until you need them. It is built to be customized: themes and keybindings are plain TOML files. There is no telemetry and no accounts; the only network request is an update check against GitHub releases, which asks before installing anything and can be turned off.
 
 ## Features
 
@@ -33,7 +33,7 @@ cargo run                      # then Ctrl+O to pick files
 cargo run -- a.pdf b.pdf       # or open some directly, one tab each
 ```
 
-PDF rendering uses [PDFium](https://pdfium.googlesource.com/pdfium/). The first build downloads a prebuilt `pdfium.dll` (from [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries)) using the `curl` and `tar` that ship with Windows, caches it in `target/pdfium/`, and copies it next to `dpdf.exe`. The app itself never uses the network.
+PDF rendering uses [PDFium](https://pdfium.googlesource.com/pdfium/). The first build downloads a prebuilt `pdfium.dll` (from [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries)) using the `curl` and `tar` that ship with Windows, caches it in `target/pdfium/`, and copies it next to `dpdf.exe`. At runtime the app only contacts github.com to check for updates (`check_updates` in `config.toml`).
 
 To distribute dpdf, ship `dpdf.exe` and `pdfium.dll` together from `target/release/`. Pushing a `v*` tag runs the `release` workflow, which builds both, a zip, and an [Inno Setup](https://jrsoftware.org/isinfo.php) installer (`installer/dpdf.iss`), and publishes a GitHub release.
 
@@ -114,6 +114,7 @@ density = "comfortable"          # compact, comfortable, spacious
 corners = "rounded"              # sharp, rounded, round
 thumbnail_size = "medium"        # small, medium, large
 vim = true
+check_updates = false            # don't ask GitHub for new releases on startup
 sidebar_button = false           # hide the header button that reopens the sidebar
 notes_folder = 'C:\Users\me\Vault\PDF notes'  # Ctrl+Shift+E writes here, no dialog
 

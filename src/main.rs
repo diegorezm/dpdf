@@ -12,6 +12,7 @@ mod pdf;
 mod search;
 mod store;
 mod titlebar;
+mod update;
 mod viewer;
 
 use std::cell::RefCell;
@@ -52,6 +53,33 @@ macro_rules! on {
     }};
 }
 
+/// Checks GitHub for a newer release off the UI thread. `manual` checks
+/// (from the palette) also report "up to date" and errors.
+pub fn check_for_update(window: &AppWindow, manual: bool) {
+    let weak = window.as_weak();
+    std::thread::spawn(move || {
+        let result = update::check().map_err(|err| err.to_string());
+        let _ = slint::invoke_from_event_loop(move || {
+            if let Some(win) = weak.upgrade() {
+                with_app(|app| app.update_checked(&win, result, manual));
+            }
+        });
+    });
+}
+
+/// Downloads a release's installer off the UI thread.
+pub fn download_update(window: &AppWindow, release: update::Release) {
+    let weak = window.as_weak();
+    std::thread::spawn(move || {
+        let result = update::download(&release).map_err(|err| err.to_string());
+        let _ = slint::invoke_from_event_loop(move || {
+            if let Some(win) = weak.upgrade() {
+                with_app(|app| app.update_downloaded(&win, result));
+            }
+        });
+    });
+}
+
 fn index(value: i32) -> usize {
     usize::try_from(value).unwrap_or(0)
 }
@@ -71,6 +99,12 @@ fn main() -> Result<(), slint::PlatformError> {
     let settings = SettingsWindow::new()?;
     let app = App::new(&window, settings.clone_strong(), worker);
     APP.with(|cell| *cell.borrow_mut() = Some(app));
+
+    let mut checks_updates = false;
+    with_app(|app| checks_updates = app.checks_updates());
+    if checks_updates {
+        check_for_update(&window, false);
+    }
 
     // `dpdf file.pdf`, which is also how "Open with" passes files on Windows.
     for path in std::env::args_os().skip(1) {
@@ -167,6 +201,8 @@ fn main() -> Result<(), slint::PlatformError> {
         .pointer(&win, &kind, x, y));
     on!(window.on_popup_action, |app, win, action, i| app
         .popup_action(&win, &action, index(i)));
+    on!(window.on_update_action, |app, win, action| app
+        .update_action(&win, &action));
     on!(window.on_note_saved, |app, win| app.note_saved(&win));
     on!(window.on_palette_edited, |app, win, text| app
         .palette_edited(&win, &text));

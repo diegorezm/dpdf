@@ -61,3 +61,5 @@ Root: HKA; Subkey: "Software\Classes\Applications\dpdf.exe\shell\open\command"; 
 
 [Run]
 Filename: "{app}\dpdf.exe"; Description: "Launch dpdf"; Flags: nowait postinstall skipifsilent
+; Silent installs are dpdf updating itself: open it again.
+Filename: "{app}\dpdf.exe"; Flags: nowait skipifnotsilent

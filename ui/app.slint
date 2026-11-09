@@ -71,6 +71,11 @@ export component AppWindow inherits Window {
 
     // Selection / annotation popup: "", "selection", or "annotation".
     in property <string> popup;
+    // A newer release and whether it can install itself (not portable).
+    in property <string> update-version;
+    in property <bool> update-installs;
+    // "install", "skip", or "later".
+    callback update-action(string);
     // The note of the annotation under the mouse, shown as a tooltip.
     in property <string> note-tip;
     in property <length> note-tip-x;
@@ -443,6 +448,56 @@ export component AppWindow inherits Window {
                         }
                         new-session => {
                             root.header-action("new-session");
+                        }
+                    }
+
+                    // Update available.
+                    Panel {
+                        visible: root.overlay == "update";
+                        x: (parent.width - self.width) / 2;
+                        y: parent.height * 0.2;
+                        width: 380px;
+                        height: update-layout.preferred-height;
+
+                        update-layout := VerticalLayout {
+                            padding: 14px;
+                            spacing: 10px;
+
+                            Text {
+                                text: "dpdf \{root.update-version} is available";
+                                color: Theme.text;
+                                font-size: Theme.font-size;
+                            }
+                            Text {
+                                text: root.update-installs ? "dpdf will close, update, and open again." : "This copy isn't installed, so the release page will open.";
+                                color: Theme.text-muted;
+                                font-size: Theme.font-size-small;
+                                wrap: word-wrap;
+                            }
+                            HorizontalLayout {
+                                alignment: end;
+                                spacing: 4px;
+
+                                TextButton {
+                                    text: "Skip this version";
+                                    clicked => {
+                                        root.update-action("skip");
+                                    }
+                                }
+                                TextButton {
+                                    text: "Later";
+                                    clicked => {
+                                        root.update-action("later");
+                                    }
+                                }
+                                TextButton {
+                                    text: root.update-installs ? "Update" : "Open page";
+                                    active: true;
+                                    clicked => {
+                                        root.update-action("install");
+                                    }
+                                }
+                            }
                         }
                     }
 

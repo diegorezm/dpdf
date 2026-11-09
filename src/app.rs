@@ -16,6 +16,7 @@ use crate::palette::{self, Entry, Target};
 use crate::pdf::{Event, Worker};
 use crate::store::{unique_name, Session, Store, DEFAULT_SESSION};
 use crate::titlebar;
+use crate::update;
 use crate::viewer::{file_name, to_color, ui_int, PopupOutcome, SidePanel, Viewer};
 use crate::{
     AppWindow, KeyRow, PaletteItem, RecentItem, SettingsWindow, TabItem, Theme, ThemeCard,
@@ -48,6 +49,8 @@ pub struct App {
     session_items: Rc<VecModel<RecentItem>>,
     /// What the name prompt is asking for.
     prompt: Option<Prompt>,
+    /// A newer release, while its prompt is open or it downloads.
+    update: Option<update::Release>,
 
     palette_entries: Vec<Entry>,
     palette_shown: Vec<Entry>,
@@ -85,6 +88,7 @@ impl App {
             tab_items,
             session_items,
             prompt: None,
+            update: None,
             palette_entries: Vec::new(),
             palette_shown: Vec::new(),
             palette_selected: 0,
@@ -432,6 +436,10 @@ impl App {
                 }
             }
             Action::ExportNotes => self.export_notes(window),
+            Action::CheckForUpdates => {
+                window.set_status("Checking for updates…".into());
+                crate::check_for_update(window, true);
+            }
             Action::ReloadConfig => {
                 self.reload_config(window);
                 window.set_status("Config reloaded".into());
@@ -1038,6 +1046,80 @@ impl App {
         self.palette_items.set_vec(items);
         window.set_palette_selected(ui_int(self.palette_selected));
         debug_assert!(self.palette_items.row_count() == self.palette_shown.len());
+    }
+
+    // ----- Updates ------------------------------------------------------------
+
+    pub fn checks_updates(&self) -> bool {
+        self.config.check_updates
+    }
+
+    pub fn update_checked(
+        &mut self,
+        window: &AppWindow,
+        result: Result<Option<update::Release>, String>,
+        manual: bool,
+    ) {
+        match result {
+            Ok(Some(release)) => {
+                let skipped = update::skipped().as_deref() == Some(release.version.as_str());
+                // Don't cover something the user is typing into.
+                let busy = !window.get_overlay().is_empty();
+                if manual || (!skipped && !busy) {
+                    window.set_status("".into());
+                    window.set_update_version(release.version.as_str().into());
+                    window.set_update_installs(update::installed());
+                    self.update = Some(release);
+                    self.set_overlay(window, "update");
+                }
+            }
+            Ok(None) if manual => {
+                window.set_status("dpdf is up to date".into());
+                clear_status_later(window);
+            }
+            Err(err) if manual => {
+                window.set_status(format!("Couldn't check for updates: {err}").into());
+                clear_status_later(window);
+            }
+            _ => {}
+        }
+    }
+
+    /// "install", "skip", or "later", from the update prompt.
+    pub fn update_action(&mut self, window: &AppWindow, action: &str) {
+        self.set_overlay(window, "");
+        let Some(release) = self.update.take() else {
+            return;
+        };
+        match action {
+            "install" if update::installed() => {
+                window.set_status(format!("Downloading dpdf {}…", release.version).into());
+                crate::download_update(window, release);
+            }
+            // A portable copy: let the user fetch the new zip.
+            "install" => update::open_page(&release),
+            "skip" => {
+                if let Err(err) = update::skip(&release) {
+                    window.set_status(format!("Couldn't save that: {err}").into());
+                    clear_status_later(window);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn update_downloaded(&mut self, window: &AppWindow, result: Result<PathBuf, String>) {
+        let result = result.and_then(|path| update::install(&path).map_err(|e| e.to_string()));
+        match result {
+            // The installer replaces the running exe; get out of its way.
+            Ok(()) => {
+                let _ = slint::quit_event_loop();
+            }
+            Err(err) => {
+                window.set_status(format!("Update failed: {err}").into());
+                clear_status_later(window);
+            }
+        }
     }
 
     /// Saves positions and the session on exit.

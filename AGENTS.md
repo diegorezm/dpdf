@@ -73,7 +73,7 @@ Deferred — may come later, must stay optional, local, and non-intrusive:
 Rejected by default:
 - Permanent toolbars, ribbons, sidebar-heavy layouts.
 - Accounts, subscriptions, cloud sync, any network dependency.
-- Telemetry, analytics, auto-updaters.
+- Telemetry, analytics, silent or forced updates.
 - AI assistant panels, plugin systems.
 - Excessive settings, decorative animations.
 
@@ -135,6 +135,7 @@ src/
   config.rs       // config.toml + theme files
   store.rs        // reading history and last session (state.txt)
   nav.rs          // pure page navigation and page-number parsing
+  update.rs       // update check and install from GitHub releases
 ui/
   app.slint       // main window: header, tabs, reader, overlays
   reader.slint    // page strip, thumbnails sidebar, start screen, tab bar
@@ -176,6 +177,7 @@ Rules:
 
 **Security & privacy**
 - No network access, ever, without an explicit future decision recorded here.
+- Recorded exception (update check): `update.rs` asks github.com for the latest release on startup (`check_updates = true` by default, off in `config.toml`) and from the palette. It sends nothing about the user, downloads only after the user agrees, verifies the installer against the release's `SHA256SUMS.txt`, and uses Windows' `curl.exe` so there is no HTTP stack in the binary. Portable copies only open the release page.
 - Treat PDFs as untrusted input: never panic, bound memory on huge pages, validate page indices.
 - Never log document contents or full paths at default log levels.
 - Never commit secrets, local configs, or user documents.
