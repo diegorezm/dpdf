@@ -373,6 +373,9 @@ impl App {
             Action::ToggleSidebar => {
                 window.set_sidebar_visible(!window.get_sidebar_visible());
                 self.viewer.sidebar_shown(window);
+                // Closing from the sidebar's own button removes the focused
+                // element; take focus back so Ctrl+B still reaches us.
+                window.invoke_focus_overlay();
             }
             Action::ShowThumbnails | Action::ShowOutline | Action::ShowNotes => {
                 let panel = match action {
