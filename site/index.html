@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dpdf — a calm PDF reader</title>
+  <meta name="description" content="A fast, minimal, local-first PDF reader for Windows, built with Rust and Slint.">
+  <link rel="icon" href="icon.svg">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,700&family=JetBrains+Mono:wght@400;600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="book">
+  <nav>
+    <a class="brand" href="./"><img src="icon.svg" alt="">dpdf</a>
+    <a href="docs.html">Docs</a>
+    <a href="https://github.com/diegorezm/dpdf">GitHub</a>
+  </nav>
+
+  <h1>Just read<br>the <em>page.</em></h1>
+  <p class="lede">dpdf is a fast, minimal PDF reader for Windows. The page fills the screen, controls stay hidden until you need them, and nothing leaves your machine.</p>
+  <a class="button primary" href="https://github.com/diegorezm/dpdf/releases">Download</a>
+  <a class="button" href="docs.html">Read the docs</a>
+
+  <h2>What it <em>does</em></h2>
+  <div class="spread">
+    <div class="box"><h3>Reading</h3><p>Continuous scrolling, fit width or page, thumbnails, go to page, fullscreen, and a focus mode that hides everything but the text.</p></div>
+    <div class="box"><h3>Tabs and sessions</h3><p>Open several PDFs at once. dpdf reopens every tab at the page and zoom you left it, like reattaching to tmux.</p></div>
+    <div class="box"><h3>Annotations</h3><p>Highlight, underline, strike through, and attach notes. Export them as Markdown. The PDF is never modified.</p></div>
+    <div class="box"><h3>Keyboard first</h3><p>Every action has a shortcut and lives in the command palette (<kbd>Ctrl+K</kbd>). Optional vim keys.</p></div>
+    <div class="box"><h3>Yours to shape</h3><p>Themes and keybindings are plain TOML files. Dark by default, light as a peer.</p></div>
+    <div class="box"><h3>Private</h3><p>No telemetry, no accounts, no network. Native Rust and Slint, no browser engine inside.</p></div>
+  </div>
+
+  <blockquote>Fast, lightweight, calm.<small>The dpdf philosophy</small></blockquote>
+
+  <footer>MIT licensed · <a href="https://github.com/diegorezm/dpdf">source on GitHub</a></footer>
+</main>
+</body>
+</html>

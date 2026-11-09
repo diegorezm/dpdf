@@ -1,0 +1,95 @@
+:root {
+  --paper: #dfe8c3;
+  --paper-deep: #d3ddb3;
+  --ink: #2e4a3b;
+  --ink-soft: #4f6a5a;
+  --line: #9fb39a;
+  --cover: #d9762b;
+  --serif: "Fraunces", Georgia, serif;
+  --sans: "Source Sans 3", system-ui, sans-serif;
+  --mono: "JetBrains Mono", Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--cover);
+  color: var(--ink);
+  font: 17px/1.6 var(--sans);
+}
+
+/* The page sits on an orange cover, like an open notebook. */
+.book {
+  max-width: 980px;
+  margin: 32px auto;
+  padding: 56px 64px;
+  background: var(--paper);
+  border-radius: 6px;
+}
+
+nav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 64px;
+  font-size: 15px;
+}
+nav .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; font: 600 18px var(--mono); }
+nav img { width: 28px; height: 28px; }
+a { color: var(--ink); }
+nav a { text-decoration: none; }
+nav a:hover { text-decoration: underline; }
+
+h1, h2, h3 { font-family: var(--serif); font-weight: 400; line-height: 1.1; margin: 0 0 16px; }
+h1 { font-size: clamp(44px, 8vw, 76px); }
+h1 em, h2 em { font-weight: 700; }
+h2 { font-size: 34px; margin-top: 56px; }
+h3 { font-size: 22px; font-weight: 600; }
+
+.lede { max-width: 560px; font-style: italic; color: var(--ink-soft); font-size: 19px; }
+
+.button {
+  display: inline-block;
+  margin: 24px 16px 0 0;
+  padding: 10px 20px;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  text-decoration: none;
+  font-weight: 600;
+}
+.button.primary { background: var(--ink); color: var(--paper); }
+
+.spread { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 40px; margin-top: 24px; }
+.box { border: 1px solid var(--line); padding: 20px 24px; }
+.box p { margin: 0; }
+.box h3 { margin-bottom: 8px; }
+
+blockquote {
+  margin: 64px 0 0;
+  text-align: right;
+  font: 600 22px var(--serif);
+}
+blockquote small {
+  display: block;
+  margin-top: 4px;
+  font: 600 11px var(--sans);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+code, kbd { font: 14px var(--mono); background: var(--paper-deep); padding: 1px 5px; border-radius: 3px; }
+pre { background: var(--paper-deep); border: 1px solid var(--line); padding: 16px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+
+table { width: 100%; border-collapse: collapse; font-size: 15px; display: block; overflow-x: auto; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+
+footer { margin-top: 80px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 14px; color: var(--ink-soft); }
+
+@media (max-width: 720px) {
+  .book { margin: 0; padding: 32px 16px; border-radius: 0; }
+  .spread { grid-template-columns: 1fr; gap: 16px; }
+  nav { margin-bottom: 40px; }
+}
