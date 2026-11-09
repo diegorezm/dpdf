@@ -33,6 +33,8 @@ const THUMB_KEEP: usize = 20;
 const RECENT_SHOWN: usize = 8;
 /// Line scroll step, in logical pixels.
 const SCROLL_STEP: f32 = 60.0;
+/// Zoom steps closer together than this count as one burst.
+const ZOOM_SETTLE: std::time::Duration = std::time::Duration::from_millis(150);
 /// How long a changed reading position may wait before it is saved.
 const SAVE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 /// Pointer travel before a press becomes a drag.
@@ -148,6 +150,8 @@ pub struct Viewer {
     visible: Range<usize>,
     /// Saves a changed reading position shortly after it changes.
     save_timer: slint::Timer,
+    /// Runs while zoom steps follow each other quickly.
+    zoom_timer: slint::Timer,
     last_thumb_request: Option<Range<usize>>,
 
     search: Option<SearchState>,
@@ -220,6 +224,7 @@ impl Viewer {
             thumb_cache: HashMap::new(),
             visible: 0..0,
             save_timer: slint::Timer::default(),
+            zoom_timer: slint::Timer::default(),
             last_thumb_request: None,
             search: None,
             next_search_id: 0,
@@ -738,6 +743,18 @@ impl Viewer {
         // Relayout moves the current page, so remember it first.
         let page = self.current_page;
         self.zoom = zoom;
+        // In a burst of zoom steps (Ctrl+wheel, held key) only the last
+        // zoom is rendered; the ones between stretch the previous render.
+        if self.zoom_timer.running() {
+            self.renders_held = true;
+        }
+        let weak = window.as_weak();
+        self.zoom_timer
+            .start(slint::TimerMode::SingleShot, ZOOM_SETTLE, move || {
+                if let Some(window) = weak.upgrade() {
+                    crate::with_app(|app| app.viewer().resize_settled(&window));
+                }
+            });
         self.relayout(window);
         if zoom == Zoom::FitPage {
             self.go_to_page(window, page);
