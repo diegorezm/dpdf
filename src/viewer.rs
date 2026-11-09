@@ -12,6 +12,7 @@ use slint::{
 };
 
 use crate::annotations::{self, Annotations, History, Kind};
+use crate::cache::PageCache;
 use crate::config::{parse_color, DefaultZoom};
 use crate::keymap::Action;
 use crate::layout::{self, Layout, Zoom};
@@ -107,8 +108,12 @@ struct TabView {
     zoom: Zoom,
     viewport: (f32, f32),
     /// Only the pages around the viewport, so this stays small.
-    cache: HashMap<usize, (u32, Image)>,
+    cache: PageCache<Image>,
 }
+
+/// Memory for rendered pages of the open document: about 18 pages of
+/// 1600 px. Pages farthest from the viewport go first.
+const PAGE_CACHE_BYTES: usize = 192 * 1024 * 1024;
 
 /// Documents whose view is kept; matches the worker's open documents.
 const KEPT_VIEWS: usize = 4;
@@ -128,7 +133,7 @@ pub struct Viewer {
     current_page: usize,
     pages: Rc<VecModel<PageView>>,
     /// Rendered pages and the pixel width they were rendered at.
-    cache: HashMap<usize, (u32, Image)>,
+    cache: PageCache<Image>,
     last_request: Option<(Range<usize>, u32)>,
     /// Pages currently in the UI model, to skip rebuilding it while scrolling.
     shown_pages: Option<Range<usize>>,
@@ -139,6 +144,8 @@ pub struct Viewer {
     sidebar_width: f32,
     thumbs: Rc<VecModel<ThumbView>>,
     thumb_cache: HashMap<usize, Image>,
+    /// Pages on screen, which the page cache never evicts.
+    visible: Range<usize>,
     /// Saves a changed reading position shortly after it changes.
     save_timer: slint::Timer,
     last_thumb_request: Option<Range<usize>>,
@@ -203,7 +210,7 @@ impl Viewer {
             default_zoom: Zoom::FitWidth,
             current_page: 0,
             pages,
-            cache: HashMap::new(),
+            cache: PageCache::new(PAGE_CACHE_BYTES),
             last_request: None,
             shown_pages: None,
             shown_thumbs: None,
@@ -211,6 +218,7 @@ impl Viewer {
             sidebar_width: 180.0,
             thumbs,
             thumb_cache: HashMap::new(),
+            visible: 0..0,
             save_timer: slint::Timer::default(),
             last_thumb_request: None,
             search: None,
@@ -313,8 +321,13 @@ impl Viewer {
                 zoom: self.zoom,
                 viewport: (window.get_viewport_x(), window.get_viewport_y()),
                 // Images are shared, so this copies no pixels; the old pages stay
-                // on screen until the next document arrives.
-                cache: self.cache.clone(),
+                // on screen until the next document arrives. Only the pages on
+                // screen are kept, so kept views stay small.
+                cache: {
+                    let mut cache = self.cache.clone();
+                    cache.retain(&self.shown_pages.clone().unwrap_or(0..0));
+                    cache
+                },
             },
         );
         self.tab_views.truncate(KEPT_VIEWS);
@@ -472,11 +485,13 @@ impl Viewer {
     pub fn rendered(&mut self, window: &AppWindow, page: usize, width_px: u32, bitmap: PageBuffer) {
         // A render for an outdated width still beats a blank page.
         let stale = width_px != self.target_width_px(window);
-        if stale && self.cache.contains_key(&page) {
+        if stale && self.cache.contains(page) {
             return;
         }
+        let bytes = bitmap.as_bytes().len();
+        let visible = self.visible.clone();
         self.cache
-            .insert(page, (width_px, Image::from_rgb8(bitmap)));
+            .insert(page, width_px, bytes, Image::from_rgb8(bitmap), &visible);
         // Only this page's item changes; rebuilding them all would recreate
         // every page's image, highlight, and mark items.
         let row = self
@@ -584,7 +599,8 @@ impl Viewer {
             // a crash, without writing the file on each page scrolled past.
             self.remember_position_soon();
         }
-        self.cache.retain(|page, _| keep.contains(page));
+        self.cache.retain(&keep);
+        self.visible = visible.clone();
         if force || self.shown_pages.as_ref() != Some(&preload) {
             self.pages.set_vec(self.page_views(window, preload.clone()));
             self.shown_pages = Some(preload.clone());
@@ -1418,7 +1434,7 @@ impl Viewer {
         // Snap to physical pixels so a 1:1 render isn't resampled into blur.
         let snap = |v: f32| (v * scale).round() / scale;
         let rect = self.layout.rect(page)?;
-        let image = self.cache.get(&page).map(|(_, img)| img.clone());
+        let image = self.cache.get(page).cloned();
         Some(PageView {
             x: snap(rect.x),
             y: snap(rect.y),
@@ -1501,7 +1517,7 @@ impl Viewer {
         let pages: Vec<usize> = visible
             .clone()
             .chain(preload.filter(|p| !visible.contains(p)))
-            .filter(|p| self.cache.get(p).map(|(w, _)| *w) != Some(width_px))
+            .filter(|&p| self.cache.width(p) != Some(width_px))
             .collect();
         self.last_request = Some(key);
         self.worker.send(Request::Render { pages, width_px });

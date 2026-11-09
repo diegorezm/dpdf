@@ -128,6 +128,7 @@ src/
   viewer.rs       // the open document: layout, render cache, search, selection, annotations
   pdf.rs          // PDFium worker thread: open, render, search, select text (no Slint types)
   layout.rs       // pure page-strip geometry, zoom modes
+  cache.rs        // pure page cache bounded by a memory budget
   keymap.rs       // actions, key chords and sequences, default + vim bindings
   palette.rs      // pure fuzzy matching for the command palette
   search.rs       // pure search results and match navigation
@@ -151,7 +152,7 @@ The PDF worker processes one small unit at a time (text selection > page render 
 
 Rules:
 - `.slint` files expose properties and callbacks; they contain no business logic beyond trivial layout/visibility bindings.
-- `pdf`, `layout`, `nav`, `keymap`, `palette`, `search`, `annotations`, `config`, `store` must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs`, `app.rs`, and `viewer.rs` touch Slint types.
+- `pdf`, `layout`, `cache`, `nav`, `keymap`, `palette`, `search`, `annotations`, `config`, `store` must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs`, `app.rs`, and `viewer.rs` touch Slint types.
 - State flows one way: UI callback → `Action` → controller updates state → controller pushes properties to UI.
 - Paths: everything user-owned lives in `%APPDATA%\dpdf` (`config.toml`, `themes\`, `annotations\`, `state.txt`); caches go in `%LOCALAPPDATA%\dpdf`. Never write next to the executable, in the document folder, or into the PDF.
 - User files must never block startup: parse leniently, fall back to defaults, and report problems in Settings.

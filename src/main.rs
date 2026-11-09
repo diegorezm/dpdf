@@ -3,6 +3,7 @@
 
 mod annotations;
 mod app;
+mod cache;
 mod config;
 mod keymap;
 mod layout;
