@@ -556,7 +556,9 @@ fn render(
     forms: bool,
 ) -> Result<Bitmap, PdfiumError> {
     let pdf_page = load_page(doc, page)?;
-    let width = Pixels::try_from(width_px.max(1)).unwrap_or(Pixels::MAX);
+    let size = (pdf_page.width().value, pdf_page.height().value);
+    let width_px = capped_width(width_px, size);
+    let width = Pixels::try_from(width_px).unwrap_or(Pixels::MAX);
     let config = PdfRenderConfig::new()
         .set_target_width(width)
         .render_form_data(forms);
@@ -570,6 +572,28 @@ fn render(
         height: u32::try_from(bitmap.height()).unwrap_or(0),
         rgba,
     })
+}
+
+/// Most pixels one render may have: 24 M is 72 MB as RGB, an A4 page
+/// about 4100 px wide. Deeper zoom stretches the render instead.
+const MAX_RENDER_PIXELS: f32 = 24_000_000.0;
+/// Longest side of a render; larger textures fail on many GPUs.
+const MAX_RENDER_SIDE: f32 = 16_384.0;
+
+/// `width_px`, shrunk so a page of `size` (points) stays within
+/// `MAX_RENDER_PIXELS` and `MAX_RENDER_SIDE`. Never below one pixel.
+fn capped_width(width_px: u32, (w, h): (f32, f32)) -> u32 {
+    let width_px = width_px.max(1);
+    if !(w > 0.0 && h > 0.0) {
+        return width_px;
+    }
+    let max = (MAX_RENDER_PIXELS * w / h)
+        .sqrt()
+        .min(MAX_RENDER_SIDE)
+        .min(MAX_RENDER_SIDE * w / h)
+        .floor()
+        .max(1.0) as u32;
+    width_px.min(max)
 }
 
 /// Inverts RGB, leaving alpha, then softens pure black so a page reads as
@@ -983,6 +1007,19 @@ mod tests {
         assert_eq!(text, ["page", "middle", "last"]);
         assert_eq!(parts.iter().map(|p| p.page).collect::<Vec<_>>(), [0, 1, 2]);
         assert!(select_pages((0, (0.0, 0.0)), (1, (0.0, 0.0)), |_| Vec::new()).is_empty());
+    }
+
+    #[test]
+    fn huge_renders_are_capped() {
+        assert_eq!(capped_width(1600, (595.0, 842.0)), 1600);
+        let w = capped_width(100_000, (595.0, 842.0));
+        let h = w as f32 * 842.0 / 595.0;
+        assert!(w as f32 * h <= MAX_RENDER_PIXELS && w > 4000);
+        // A very long, thin page is capped by area, not width.
+        assert!(capped_width(2000, (100.0, 100_000.0)) < 200);
+        // So is a very long one by its height.
+        assert!(capped_width(2000, (100.0, 20_000.0)) as f32 * 200.0 <= MAX_RENDER_SIDE);
+        assert_eq!(capped_width(0, (0.0, 0.0)), 1);
     }
 
     #[test]
