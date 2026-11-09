@@ -17,6 +17,7 @@ use crate::pdf::{Event, Worker};
 use crate::store::{unique_name, Session, Store, DEFAULT_SESSION};
 use crate::titlebar;
 use crate::update;
+use crate::viewer::PageBuffer;
 use crate::viewer::{file_name, to_color, ui_int, PopupOutcome, SidePanel, Viewer};
 use crate::{
     AppWindow, KeyRow, PaletteItem, RecentItem, SettingsWindow, TabItem, Theme, ThemeCard,
@@ -807,7 +808,7 @@ impl App {
 
     // ----- Worker events ---------------------------------------------------
 
-    pub fn event(&mut self, window: &AppWindow, event: Event) {
+    pub fn event(&mut self, window: &AppWindow, event: Event<PageBuffer>) {
         match event {
             // A document opened after a newer one was requested is stale.
             Event::Opened { ref path, .. } if !self.viewer.is_pending(path) => {}

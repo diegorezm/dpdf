@@ -7,7 +7,7 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use slint::{Color, ComponentHandle, Image, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
+use slint::{Color, ComponentHandle, Image, ModelRc, Rgb8Pixel, SharedPixelBuffer, VecModel};
 
 use crate::annotations::{self, Annotations, History, Kind};
 use crate::config::{parse_color, DefaultZoom};
@@ -442,18 +442,19 @@ impl Viewer {
 
     // ----- Rendering -------------------------------------------------------
 
-    pub fn rendered(&mut self, window: &AppWindow, page: usize, width_px: u32, bitmap: Bitmap) {
+    pub fn rendered(&mut self, window: &AppWindow, page: usize, width_px: u32, bitmap: PageBuffer) {
         // A render for an outdated width still beats a blank page.
         let stale = width_px != self.target_width_px(window);
         if stale && self.cache.contains_key(&page) {
             return;
         }
-        self.cache.insert(page, (width_px, to_image(&bitmap)));
+        self.cache
+            .insert(page, (width_px, Image::from_rgb8(bitmap)));
         self.refresh(window);
     }
 
-    pub fn thumbnail(&mut self, window: &AppWindow, page: usize, bitmap: Bitmap) {
-        self.thumb_cache.insert(page, to_image(&bitmap));
+    pub fn thumbnail(&mut self, window: &AppWindow, page: usize, bitmap: PageBuffer) {
+        self.thumb_cache.insert(page, Image::from_rgb8(bitmap));
         self.refresh_thumbs(window);
     }
 
@@ -1492,13 +1493,19 @@ pub fn to_color(hex: &str) -> Color {
     })
 }
 
-fn to_image(bitmap: &Bitmap) -> Image {
-    let buffer = SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
-        &bitmap.rgba,
-        bitmap.width,
-        bitmap.height,
-    );
-    Image::from_rgba8(buffer)
+/// Pixels ready for the UI. Pages are opaque, so RGB saves a quarter of
+/// the memory of RGBA.
+pub type PageBuffer = SharedPixelBuffer<Rgb8Pixel>;
+
+/// Converts a rendered bitmap for the UI. Called on the worker thread, so
+/// the UI thread never copies pixels.
+pub fn to_buffer(bitmap: Bitmap) -> PageBuffer {
+    let mut buffer = PageBuffer::new(bitmap.width, bitmap.height);
+    let rgba = bitmap.rgba.as_chunks::<4>().0;
+    for (dst, src) in buffer.make_mut_slice().iter_mut().zip(rgba) {
+        *dst = Rgb8Pixel::new(src[0], src[1], src[2]);
+    }
+    buffer
 }
 
 pub fn file_name(path: &Path) -> String {

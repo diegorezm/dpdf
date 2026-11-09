@@ -53,7 +53,9 @@ pub enum LinkTarget {
     Uri(String),
 }
 
-pub enum Event {
+/// `B` is the bitmap type: the worker sends `Bitmap`s, which the receiver
+/// may convert (with `map_bitmap`) before handing them to the UI thread.
+pub enum Event<B = Bitmap> {
     /// `page_sizes` are in points, one per page.
     Opened {
         path: PathBuf,
@@ -73,11 +75,11 @@ pub enum Event {
     Rendered {
         page: usize,
         width_px: u32,
-        bitmap: Bitmap,
+        bitmap: B,
     },
     Thumbnail {
         page: usize,
-        bitmap: Bitmap,
+        bitmap: B,
     },
     /// Matches on one page; sent only for pages with matches, in page order.
     SearchHits {
@@ -92,6 +94,45 @@ pub enum Event {
     /// selected.
     Selection(Vec<SelectionPart>),
     Error(String),
+}
+
+impl<B> Event<B> {
+    /// Converts the bitmap of a render or thumbnail, if any.
+    pub fn map_bitmap<C>(self, f: impl FnOnce(B) -> C) -> Event<C> {
+        match self {
+            Event::Rendered {
+                page,
+                width_px,
+                bitmap,
+            } => Event::Rendered {
+                page,
+                width_px,
+                bitmap: f(bitmap),
+            },
+            Event::Thumbnail { page, bitmap } => Event::Thumbnail {
+                page,
+                bitmap: f(bitmap),
+            },
+            Event::Opened {
+                path,
+                title,
+                page_sizes,
+                outline,
+            } => Event::Opened {
+                path,
+                title,
+                page_sizes,
+                outline,
+            },
+            Event::PasswordNeeded { path, retry } => Event::PasswordNeeded { path, retry },
+            Event::Labels(labels) => Event::Labels(labels),
+            Event::Link(target) => Event::Link(target),
+            Event::SearchHits { id, page, matches } => Event::SearchHits { id, page, matches },
+            Event::SearchDone { id } => Event::SearchDone { id },
+            Event::Selection(parts) => Event::Selection(parts),
+            Event::Error(message) => Event::Error(message),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -352,7 +393,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
             })));
         } else if let Some(page) = renders.pages.pop_front() {
             let width_px = renders.width_px;
-            match render(doc, page, width_px, inverted) {
+            match render(doc, page, width_px, inverted, true) {
                 Ok(bitmap) => on_event(Event::Rendered {
                     page,
                     width_px,
@@ -382,7 +423,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
         } else if let Some(page) = thumbs.pages.pop_front() {
             let width_px = thumbs.width_px;
             // A missing thumbnail isn't worth interrupting the reader for.
-            if let Ok(bitmap) = render(doc, page, width_px, inverted) {
+            if let Ok(bitmap) = render(doc, page, width_px, inverted, false) {
                 on_event(Event::Thumbnail { page, bitmap });
             }
         } else if let Some(found) = &mut labels {
@@ -506,17 +547,19 @@ fn load_page<'a>(doc: &'a PdfDocument, page: usize) -> Result<PdfPage<'a>, Pdfiu
     doc.pages().get(index)
 }
 
+/// `forms` draws form fields; thumbnails skip them, too small to matter.
 fn render(
     doc: &PdfDocument,
     page: usize,
     width_px: u32,
     inverted: bool,
+    forms: bool,
 ) -> Result<Bitmap, PdfiumError> {
     let pdf_page = load_page(doc, page)?;
     let width = Pixels::try_from(width_px.max(1)).unwrap_or(Pixels::MAX);
     let config = PdfRenderConfig::new()
         .set_target_width(width)
-        .render_form_data(true);
+        .render_form_data(forms);
     let bitmap = pdf_page.render_with_config(&config)?;
     let mut rgba = bitmap.as_rgba_bytes();
     if inverted {
@@ -532,9 +575,19 @@ fn render(
 /// Inverts RGB, leaving alpha, then softens pure black so a page reads as
 /// a dark-grey surface rather than a black hole.
 fn invert(rgba: &mut [u8]) {
+    // A lookup table: one load per channel instead of a multiply and divide.
+    const LUT: [u8; 256] = {
+        let mut lut = [0; 256];
+        let mut i = 0;
+        while i < 256 {
+            lut[i] = 24 + ((255 - i) * 206 / 255) as u8;
+            i += 1;
+        }
+        lut
+    };
     for px in rgba.as_chunks_mut::<4>().0 {
         for c in &mut px[..3] {
-            *c = 24 + ((255 - *c) as u16 * 206 / 255) as u8;
+            *c = LUT[*c as usize];
         }
     }
 }
@@ -961,13 +1014,20 @@ mod tests {
         let pages: Vec<usize> = (0..sizes.len())
             .step_by((sizes.len() / 20).max(1))
             .collect();
-        for (label, width) in [("page render 1600 px", 1600), ("thumbnail 180 px", 180)] {
+        for (label, width, forms) in [
+            ("page render 1600 px", 1600, true),
+            ("thumbnail 180 px", 180, false),
+        ] {
             let t = Instant::now();
             for &page in &pages {
-                render(&doc, page, width, false).unwrap();
+                render(&doc, page, width, false, forms).unwrap();
             }
             println!("{label}: {:.1} ms avg", ms(t) / pages.len() as f64);
         }
+        let mut bitmap = render(&doc, 0, 1600, false, true).unwrap();
+        let t = Instant::now();
+        invert(&mut bitmap.rgba);
+        println!("invert 1600 px: {:.2} ms", ms(t));
         let t = Instant::now();
         for page in 0..sizes.len() {
             search_page(&doc, page, "holmes").unwrap();
@@ -992,10 +1052,10 @@ mod tests {
         assert!(outline(&doc).is_empty());
         assert_eq!(link_at(&doc, 0, (0.5, 0.5)), None);
         assert_eq!(sizes, vec![(200.0, 300.0); 2]);
-        let bitmap = render(&doc, 1, 100, false).unwrap();
+        let bitmap = render(&doc, 1, 100, false, true).unwrap();
         assert_eq!((bitmap.width, bitmap.height), (100, 150));
         assert_eq!(bitmap.rgba.len(), 100 * 150 * 4);
-        assert!(render(&doc, 5, 100, false).is_err());
+        assert!(render(&doc, 5, 100, false, true).is_err());
         assert_eq!(
             search_page(&doc, 0, "anything").unwrap(),
             Vec::<Vec<_>>::new()

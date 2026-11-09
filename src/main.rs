@@ -89,6 +89,8 @@ fn main() -> Result<(), slint::PlatformError> {
 
     let weak = window.as_weak();
     let worker = Worker::spawn(move |event| {
+        // Pixel conversion stays on the worker thread.
+        let event = event.map_bitmap(viewer::to_buffer);
         let weak = weak.clone();
         let _ = slint::invoke_from_event_loop(move || {
             if let Some(window) = weak.upgrade() {
