@@ -1,10 +1,10 @@
 :root {
-  --paper: #dfe8c3;
-  --paper-deep: #d3ddb3;
-  --ink: #2e4a3b;
-  --ink-soft: #4f6a5a;
-  --line: #9fb39a;
-  --cover: #d9762b;
+  --paper: #f5f4f0;
+  --paper-deep: #eae8e2;
+  --ink: #1d1f24;
+  --ink-soft: #5c5f68;
+  --line: #d4d2cb;
+  --cover: #17181c;
   --serif: "Fraunces", Georgia, serif;
   --sans: "Source Sans 3", system-ui, sans-serif;
   --mono: "JetBrains Mono", Consolas, monospace;
@@ -19,7 +19,7 @@ body {
   font: 17px/1.6 var(--sans);
 }
 
-/* The page sits on an orange cover, like an open notebook. */
+/* The page sits on a graphite cover, like dpdf's own reading area. */
 .book {
   max-width: 980px;
   margin: 32px auto;
@@ -43,7 +43,7 @@ nav a:hover { text-decoration: underline; }
 
 h1, h2, h3 { font-family: var(--serif); font-weight: 400; line-height: 1.1; margin: 0 0 16px; }
 h1 { font-size: clamp(44px, 8vw, 76px); }
-h1 em, h2 em { font-weight: 700; }
+h1 em, h2 em { font-weight: 700; color: #3d5bd9; }
 h2 { font-size: 34px; margin-top: 56px; }
 h3 { font-size: 22px; font-weight: 600; }
 
