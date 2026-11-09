@@ -14,6 +14,7 @@ use crate::keymap::{Action, Chord, KeyResult, Keymap};
 use crate::palette::{self, Entry, Target};
 use crate::pdf::{Event, Worker};
 use crate::store::Store;
+use crate::titlebar;
 use crate::viewer::{file_name, to_color, ui_int, PopupOutcome, Viewer};
 use crate::{AppWindow, KeyRow, PaletteItem, SettingsWindow, TabItem, Theme, ThemeCard};
 
@@ -22,6 +23,8 @@ const PALETTE_LIMIT: usize = 12;
 pub struct App {
     viewer: Viewer,
     settings: SettingsWindow,
+    /// Title bar caption, text, and border colors, and whether it's dark.
+    title_colors: Option<(slint::Color, slint::Color, slint::Color, bool)>,
     config: Config,
     themes: Vec<ThemeDef>,
     keymap: Keymap,
@@ -56,6 +59,7 @@ impl App {
         let mut app = Self {
             viewer: Viewer::new(window, worker, store),
             settings,
+            title_colors: None,
             config: Config::default(),
             themes: built_in_themes(),
             keymap: Keymap::default(),
@@ -105,6 +109,15 @@ impl App {
             t.set_font_family(self.config.font.as_str().into());
             t.set_font_size(font_size);
         }
+        self.title_colors = theme.as_ref().map(|t| {
+            (
+                to_color(&t.background),
+                to_color(&t.text),
+                to_color(&t.border),
+                t.dark,
+            )
+        });
+        paint_title_bars_soon(window.as_weak());
         if let Some(theme) = &theme {
             apply_theme(&window.global::<Theme>(), theme);
             apply_theme(&self.settings.global::<Theme>(), theme);
@@ -294,7 +307,7 @@ impl App {
                 window.set_goto_text(ui_int(self.viewer.current_page() + 1).to_string().into());
                 self.set_overlay(window, "goto");
             }
-            Action::Settings => self.toggle_settings(),
+            Action::Settings => self.toggle_settings(window),
             Action::ToggleSidebar => {
                 window.set_sidebar_visible(!window.get_sidebar_visible());
                 self.viewer.sidebar_shown(window);
@@ -372,15 +385,28 @@ impl App {
     }
 
     /// Shows the settings window, or hides it if it's already in front.
-    pub fn toggle_settings(&self) {
-        let window = self.settings.window();
-        let result = if window.is_visible() {
-            window.hide()
+    pub fn toggle_settings(&self, window: &AppWindow) {
+        let settings = self.settings.window();
+        let result = if settings.is_visible() {
+            settings.hide()
         } else {
             self.settings.show()
         };
         // Failing to open settings isn't worth crashing the reader over.
         let _ = result;
+        paint_title_bars_soon(window.as_weak());
+    }
+
+    /// Colors both windows' title bars with the theme. Returns false if a
+    /// visible window isn't ready yet.
+    pub fn paint_title_bars(&self, window: &AppWindow) -> bool {
+        let Some((caption, text, border, dark)) = self.title_colors else {
+            return true;
+        };
+        let main = titlebar::paint(window.window(), caption, text, border, dark);
+        let settings = !self.settings.window().is_visible()
+            || titlebar::paint(self.settings.window(), caption, text, border, dark);
+        main && settings
     }
 
     pub fn close_settings(&self) {
@@ -776,6 +802,23 @@ fn apply_theme(t: &Theme<'_>, theme: &ThemeDef) {
     t.set_selection(to_color(&theme.selection));
     t.set_match(to_color(&theme.match_));
     t.set_match_current(to_color(&theme.match_current));
+}
+
+/// Paints the title bars once the native windows exist, retrying briefly
+/// because they appear a moment after `show()`.
+pub fn paint_title_bars_soon(window: slint::Weak<AppWindow>) {
+    fn attempt(window: slint::Weak<AppWindow>, tries_left: u32) {
+        slint::Timer::single_shot(std::time::Duration::from_millis(50), move || {
+            let mut done = true;
+            if let Some(win) = window.upgrade() {
+                crate::with_app(|app| done = app.paint_title_bars(&win));
+            }
+            if !done && tries_left > 0 {
+                attempt(window, tries_left - 1);
+            }
+        });
+    }
+    attempt(window, 40);
 }
 
 /// Opens a file with its default app, or a folder in Explorer.

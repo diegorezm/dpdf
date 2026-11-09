@@ -83,6 +83,9 @@ pub struct Viewer {
     /// Rendered pages and the pixel width they were rendered at.
     cache: HashMap<usize, (u32, Image)>,
     last_request: Option<(Range<usize>, u32)>,
+    /// Pages currently in the UI model, to skip rebuilding it while scrolling.
+    shown_pages: Option<Range<usize>>,
+    shown_thumbs: Option<Range<usize>>,
 
     thumb_layout: Layout,
     thumbs: Rc<VecModel<ThumbView>>,
@@ -130,6 +133,8 @@ impl Viewer {
             pages,
             cache: HashMap::new(),
             last_request: None,
+            shown_pages: None,
+            shown_thumbs: None,
             thumb_layout: Layout::default(),
             thumbs,
             thumb_cache: HashMap::new(),
@@ -321,12 +326,25 @@ impl Viewer {
         self.refresh(window);
     }
 
-    /// Updates visible pages, the page counter, and render requests.
+    /// Updates visible pages, the page counter, and render requests after
+    /// anything changed.
     pub fn refresh(&mut self, window: &AppWindow) {
+        self.update(window, true);
+    }
+
+    /// Like `refresh`, for scrolling: page items are only rebuilt when a
+    /// different set of pages comes into range, so frames stay cheap.
+    pub fn scrolled(&mut self, window: &AppWindow) {
+        self.update(window, false);
+    }
+
+    fn update(&mut self, window: &AppWindow, force: bool) {
         let count = self.layout.page_count();
         if count == 0 {
             self.pages.set_vec(Vec::new());
             self.thumbs.set_vec(Vec::new());
+            self.shown_pages = None;
+            self.shown_thumbs = None;
             window.set_popup("".into());
             return;
         }
@@ -345,13 +363,24 @@ impl Viewer {
             self.remember_position();
         }
         self.cache.retain(|page, _| keep.contains(page));
-        self.pages.set_vec(self.page_views(window, preload.clone()));
+        if force || self.shown_pages.as_ref() != Some(&preload) {
+            self.pages.set_vec(self.page_views(window, preload.clone()));
+            self.shown_pages = Some(preload.clone());
+        }
         self.request_renders(window, visible, preload);
-        self.refresh_thumbs(window);
+        self.update_thumbs(window, force);
         self.update_popup(window);
     }
 
     pub fn refresh_thumbs(&mut self, window: &AppWindow) {
+        self.update_thumbs(window, true);
+    }
+
+    pub fn thumbs_scrolled(&mut self, window: &AppWindow) {
+        self.update_thumbs(window, false);
+    }
+
+    fn update_thumbs(&mut self, window: &AppWindow, force: bool) {
         let count = self.thumb_layout.page_count();
         if count == 0 || !window.get_sidebar_visible() {
             return;
@@ -362,6 +391,10 @@ impl Viewer {
         let keep = layout::with_margin(visible.clone(), THUMB_KEEP, count);
 
         self.thumb_cache.retain(|page, _| keep.contains(page));
+        if !force && self.shown_thumbs.as_ref() == Some(&preload) {
+            return;
+        }
+        self.shown_thumbs = Some(preload.clone());
         let views: Vec<ThumbView> = preload
             .clone()
             .filter_map(|page| {

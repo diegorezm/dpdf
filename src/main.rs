@@ -11,6 +11,7 @@ mod palette;
 mod pdf;
 mod search;
 mod store;
+mod titlebar;
 mod viewer;
 
 use std::cell::RefCell;
@@ -86,11 +87,11 @@ fn main() -> Result<(), slint::PlatformError> {
         handled
     });
 
-    on!(window.on_scrolled, |app, win| app.viewer().refresh(&win));
+    on!(window.on_scrolled, |app, win| app.viewer().scrolled(&win));
     on!(window.on_resized, |app, win| app.viewer().relayout(&win));
     on!(window.on_thumbs_scrolled, |app, win| app
         .viewer()
-        .refresh_thumbs(&win));
+        .thumbs_scrolled(&win));
     on!(window.on_thumb_clicked, |app, win, page| app
         .viewer()
         .go_to_page(&win, index(page)));
@@ -151,6 +152,8 @@ fn main() -> Result<(), slint::PlatformError> {
         let _ = slint::quit_event_loop();
         slint::CloseRequestResponse::HideWindow
     });
+
+    app::paint_title_bars_soon(window.as_weak());
 
     window.run()?;
     with_app(|app| app.quit());
