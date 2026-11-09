@@ -43,6 +43,16 @@ export struct ThumbView {
     loaded: bool,
 }
 
+// A row of the outline or notes panel.
+export struct SideItem {
+    title: string,
+    detail: string,
+    depth: int,
+    color: color,
+    has-color: bool,
+    current: bool,
+}
+
 export struct RecentItem {
     title: string,
     folder: string,

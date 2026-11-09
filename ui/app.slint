@@ -1,12 +1,12 @@
 import { Theme } from "theme.slint";
-import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard } from "structs.slint";
+import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem } from "structs.slint";
 import { Panel, Field, TextButton, Icon } from "widgets.slint";
 import { Sidebar, ReadingArea, StartScreen, TabBar } from "reader.slint";
 import { Palette } from "palette.slint";
 import { SettingsView } from "settings.slint";
 
 export { Theme }
-export { Highlight, Mark, PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard } from "structs.slint";
+export { Highlight, Mark, PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem } from "structs.slint";
 
 export component AppWindow inherits Window {
     title: root.page-count > 0 ? "\{root.document-title} — dpdf" : "dpdf";
@@ -40,6 +40,11 @@ export component AppWindow inherits Window {
 
     // Thumbnails.
     in property <[ThumbView]> thumbs;
+    in property <string> side-panel: "thumbs";
+    in property <[SideItem]> side-items;
+    // The current page's label (e.g. "iv") when it differs from its number.
+    in property <string> page-label;
+    in property <bool> prompt-secret;
     in property <length> thumbs-content-height;
     in-out property <length> thumbs-viewport-y;
 
@@ -75,6 +80,8 @@ export component AppWindow inherits Window {
     callback resized();
     callback thumbs-scrolled();
     callback thumb-clicked(int);
+    callback side-panel-clicked(string);
+    callback side-item-clicked(int);
     callback open-recent(int);
     callback open-session(int);
     callback prompt-accepted(string);
@@ -310,7 +317,7 @@ export component AppWindow inherits Window {
                         }
                     }
                     Text {
-                        text: root.page-count == 0 ? "" : root.status != "" ? root.status : "\{root.current-page} / \{root.page-count}";
+                        text: root.page-count == 0 ? "" : root.status != "" ? root.status : root.page-label != "" ? "\{root.page-label} (\{root.current-page} / \{root.page-count})" : "\{root.current-page} / \{root.page-count}";
                         color: Theme.text-muted;
                         font-size: Theme.font-size;
                         vertical-alignment: center;
@@ -338,8 +345,16 @@ export component AppWindow inherits Window {
                     current-page: root.current-page - 1;
                     content-height: root.thumbs-content-height;
                     viewport-y <=> root.thumbs-viewport-y;
+                    mode: root.side-panel;
+                    items: root.side-items;
                     clicked(page) => {
                         root.thumb-clicked(page);
+                    }
+                    mode-clicked(mode) => {
+                        root.side-panel-clicked(mode);
+                    }
+                    item-clicked(i) => {
+                        root.side-item-clicked(i);
                     }
                 }
 
@@ -416,6 +431,7 @@ export component AppWindow inherits Window {
                             }
                             prompt-input := Field {
                                 horizontal-stretch: 1;
+                                input-type: root.prompt-secret ? InputType.password : InputType.text;
                                 accepted => {
                                     root.prompt-accepted(self.text);
                                 }
@@ -558,7 +574,6 @@ export component AppWindow inherits Window {
                             }
                             goto-input := Field {
                                 horizontal-stretch: 1;
-                                input-type: number;
                                 accepted => {
                                     root.goto-accepted(self.text);
                                 }

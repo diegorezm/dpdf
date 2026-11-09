@@ -16,17 +16,19 @@ use crate::palette::{self, Entry, Target};
 use crate::pdf::{Event, Worker};
 use crate::store::{unique_name, Session, Store, DEFAULT_SESSION};
 use crate::titlebar;
-use crate::viewer::{file_name, to_color, ui_int, PopupOutcome, Viewer};
+use crate::viewer::{file_name, to_color, ui_int, PopupOutcome, SidePanel, Viewer};
 use crate::{
     AppWindow, KeyRow, PaletteItem, RecentItem, SettingsWindow, TabItem, Theme, ThemeCard,
 };
 
 const PALETTE_LIMIT: usize = 12;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum Prompt {
     NewSession,
     RenameSession,
+    /// The password of an encrypted document.
+    Password(PathBuf),
 }
 
 pub struct App {
@@ -366,6 +368,14 @@ impl App {
                 window.set_sidebar_visible(!window.get_sidebar_visible());
                 self.viewer.sidebar_shown(window);
             }
+            Action::ShowThumbnails | Action::ShowOutline | Action::ShowNotes => {
+                let panel = match action {
+                    Action::ShowOutline => SidePanel::Outline,
+                    Action::ShowNotes => SidePanel::Notes,
+                    _ => SidePanel::Thumbs,
+                };
+                self.show_side_panel(window, panel, true);
+            }
             Action::FocusMode => window.set_focus_mode(!window.get_focus_mode()),
             Action::Fullscreen => {
                 let fullscreen = !window.get_fullscreen();
@@ -484,9 +494,32 @@ impl App {
         let _ = self.settings.hide();
     }
 
-    pub fn set_overlay(&self, window: &AppWindow, overlay: &str) {
+    pub fn set_overlay(&mut self, window: &AppWindow, overlay: &str) {
+        // Dismissing the password prompt gives up on that document.
+        if overlay != "prompt" {
+            if let Some(Prompt::Password(path)) = self.prompt.take() {
+                if let Some(index) = self.tabs.iter().position(|t| *t == path) {
+                    self.close_tab(window, index);
+                }
+            }
+        }
         window.set_overlay(overlay.into());
         window.invoke_focus_overlay();
+    }
+
+    /// Shows a sidebar panel. With `toggle`, asking for the panel already
+    /// shown hides the sidebar.
+    pub fn show_side_panel(&mut self, window: &AppWindow, panel: SidePanel, toggle: bool) {
+        let visible = window.get_sidebar_visible();
+        if toggle && visible && self.viewer.side_panel() == panel {
+            window.set_sidebar_visible(false);
+            return;
+        }
+        if !visible {
+            window.set_sidebar_visible(true);
+        }
+        self.viewer.set_side_panel(window, panel);
+        self.viewer.sidebar_shown(window);
     }
 
     // ----- Tabs and session ------------------------------------------------
@@ -647,23 +680,32 @@ impl App {
     }
 
     fn ask_name(&mut self, window: &AppWindow, prompt: Prompt, initial: &str) {
-        self.prompt = Some(prompt);
         window.set_prompt_label(
             match prompt {
                 Prompt::NewSession => "New session",
                 Prompt::RenameSession => "Rename session",
+                Prompt::Password(_) => "Password",
             }
             .into(),
         );
+        window.set_prompt_secret(matches!(prompt, Prompt::Password(_)));
+        self.prompt = Some(prompt);
         window.set_prompt_text(initial.into());
         self.set_overlay(window, "prompt");
     }
 
     pub fn prompt_accepted(&mut self, window: &AppWindow, text: &str) {
+        // Taken first: closing the overlay with a password prompt pending
+        // would give up on the document.
+        let prompt = self.prompt.take();
         self.set_overlay(window, "");
-        match self.prompt.take() {
+        match prompt {
             Some(Prompt::NewSession) => self.new_session(window, text),
             Some(Prompt::RenameSession) => self.rename_session(window, text),
+            Some(Prompt::Password(path)) if self.viewer.is_pending(&path) => {
+                self.viewer.open_with_password(path, text.to_owned());
+            }
+            Some(Prompt::Password(_)) => {}
             None => {}
         }
     }
@@ -748,9 +790,32 @@ impl App {
 
     pub fn event(&mut self, window: &AppWindow, event: Event) {
         match event {
-            Event::Opened { title, page_sizes } => {
-                self.viewer.opened(window, title, page_sizes);
+            // A document opened after a newer one was requested is stale.
+            Event::Opened { ref path, .. } if !self.viewer.is_pending(path) => {}
+            Event::Opened {
+                title,
+                page_sizes,
+                outline,
+                ..
+            } => {
+                self.viewer.opened(window, title, page_sizes, outline);
                 self.tabs_changed(window);
+            }
+            Event::PasswordNeeded { path, retry } => {
+                if self.viewer.is_pending(&path) {
+                    self.ask_name(window, Prompt::Password(path), "");
+                    if retry {
+                        window.set_prompt_label("Wrong password".into());
+                    }
+                }
+            }
+            Event::Labels(labels) => self.viewer.labels_found(window, labels),
+            Event::Link(target) => {
+                if let Some(uri) = self.viewer.link(window, target) {
+                    // Only http(s) and mailto links get here (see pdf::safe_uri).
+                    let _ = Command::new("explorer.exe").arg(&uri).spawn();
+                    self.flash(window, "Opened link in browser");
+                }
             }
             Event::Rendered {
                 page,

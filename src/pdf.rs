@@ -13,23 +13,17 @@ use pdfium_render::prelude::*;
 use serde::{Deserialize, Serialize};
 
 pub enum Request {
-    Open(PathBuf),
+    Open {
+        path: PathBuf,
+        password: Option<String>,
+    },
     /// Replaces the render queue: render `pages`, in order, `width_px` wide.
-    Render {
-        pages: Vec<usize>,
-        width_px: u32,
-    },
+    Render { pages: Vec<usize>, width_px: u32 },
     /// Replaces the thumbnail queue. Thumbnails run after renders and search.
-    Thumbnails {
-        pages: Vec<usize>,
-        width_px: u32,
-    },
+    Thumbnails { pages: Vec<usize>, width_px: u32 },
     /// Starts a search over all pages, replacing any running one. An empty
     /// query just cancels.
-    Search {
-        id: u64,
-        query: String,
-    },
+    Search { id: u64, query: String },
     /// Selects the text between two points on a page (page fractions).
     Select {
         page: usize,
@@ -38,14 +32,42 @@ pub enum Request {
     },
     /// Invert page colors in future renders (dark reading).
     SetInverted(bool),
+    /// Follows the link at a point on a page (page fractions), if any.
+    LinkAt { page: usize, point: (f32, f32) },
+}
+
+/// One outline (table of contents) entry, flattened in reading order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutlineItem {
+    pub title: String,
+    pub depth: usize,
+    pub page: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LinkTarget {
+    Page(usize),
+    /// An external http(s) or mailto link.
+    Uri(String),
 }
 
 pub enum Event {
     /// `page_sizes` are in points, one per page.
     Opened {
+        path: PathBuf,
         title: String,
         page_sizes: Vec<(f32, f32)>,
+        outline: Vec<OutlineItem>,
     },
+    /// The document is encrypted; `retry` is true if a password was wrong.
+    PasswordNeeded {
+        path: PathBuf,
+        retry: bool,
+    },
+    /// Page labels (e.g. "iv"), one per page, empty when a page has none.
+    /// Sent once, after the rest of the opening work.
+    Labels(Vec<String>),
+    Link(Option<LinkTarget>),
     Rendered {
         page: usize,
         width_px: u32,
@@ -138,13 +160,18 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
     // Character boxes of the last page selected on, reused while dragging.
     let mut char_cache: Option<(usize, Vec<CharBox>)> = None;
     let mut inverted = false;
+    // Labels collected so far, while some pages remain.
+    let mut labels: Option<Vec<String>> = None;
+    let mut link: Option<(usize, (f32, f32))> = None;
 
     loop {
         let idle = document.is_none()
             || (renders.pages.is_empty()
                 && thumbs.pages.is_empty()
                 && search.is_none()
-                && select.is_none());
+                && select.is_none()
+                && link.is_none()
+                && labels.is_none());
         let request = if idle {
             match rx.recv() {
                 Ok(request) => Some(request),
@@ -159,20 +186,32 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
         };
 
         match request {
-            Some(Request::Open(path)) => {
+            Some(Request::Open { path, password }) => {
                 renders = Queue::default();
                 thumbs = Queue::default();
                 search = None;
                 select = None;
+                link = None;
                 char_cache = None;
-                match open(&pdfium, &path) {
+                labels = None;
+                match open(&pdfium, &path, password.as_deref()) {
                     Ok((doc, page_sizes)) => {
+                        let outline = outline(&doc);
+                        labels = Some(Vec::with_capacity(page_sizes.len()));
                         document = Some(doc);
                         on_event(Event::Opened {
                             title: file_title(&path),
+                            path,
                             page_sizes,
+                            outline,
                         });
                     }
+                    Err(PdfiumError::PdfiumLibraryInternalError(
+                        PdfiumInternalError::PasswordError,
+                    )) => on_event(Event::PasswordNeeded {
+                        path,
+                        retry: password.is_some(),
+                    }),
                     Err(err) => on_event(Event::Error(format!("Couldn't open file: {err}"))),
                 }
                 continue;
@@ -195,6 +234,10 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 select = Some((page, from, to));
                 continue;
             }
+            Some(Request::LinkAt { page, point }) => {
+                link = Some((page, point));
+                continue;
+            }
             Some(Request::SetInverted(value)) => {
                 inverted = value;
                 continue;
@@ -212,7 +255,10 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
 
         let Some(doc) = &document else { continue };
 
-        if let Some((page, from, to)) = select.take() {
+        if let Some((page, point)) = link.take() {
+            let target = link_at(doc, page, point);
+            on_event(Event::Link(target));
+        } else if let Some((page, from, to)) = select.take() {
             if char_cache.as_ref().map(|(p, _)| *p) != Some(page) {
                 char_cache = char_boxes(doc, page).ok().map(|boxes| (page, boxes));
             }
@@ -256,6 +302,19 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
             if let Ok(bitmap) = render(doc, page, width_px, inverted) {
                 on_event(Event::Thumbnail { page, bitmap });
             }
+        } else if let Some(found) = &mut labels {
+            let page = found.len();
+            let label = load_page(doc, page)
+                .ok()
+                .and_then(|p| p.label().map(str::to_owned))
+                .unwrap_or_default();
+            found.push(label);
+            if found.len() >= page_count(doc) {
+                // Most documents have no labels; don't bother the UI then.
+                if let Some(found) = labels.take().filter(|l| l.iter().any(|s| !s.is_empty())) {
+                    on_event(Event::Labels(found));
+                }
+            }
         }
     }
 }
@@ -279,8 +338,9 @@ fn bind() -> Result<Pdfium, PdfiumError> {
 fn open<'a>(
     pdfium: &'a Pdfium,
     path: &Path,
+    password: Option<&str>,
 ) -> Result<(PdfDocument<'a>, Vec<(f32, f32)>), PdfiumError> {
-    let doc = pdfium.load_pdf_from_file(path, None)?;
+    let doc = pdfium.load_pdf_from_file(path, password)?;
     // Reads sizes without loading each page, so large documents open fast.
     let sizes = doc
         .pages()
@@ -289,6 +349,69 @@ fn open<'a>(
         .map(|rect| (rect.width().value, rect.height().value))
         .collect();
     Ok((doc, sizes))
+}
+
+/// Huge or cyclic outlines are cut off rather than walked forever.
+const MAX_OUTLINE_ITEMS: usize = 5000;
+const MAX_OUTLINE_DEPTH: usize = 16;
+
+fn outline(doc: &PdfDocument) -> Vec<OutlineItem> {
+    let mut items = Vec::new();
+    walk_outline(doc.bookmarks().root(), 0, &mut items);
+    items
+}
+
+fn walk_outline(mut node: Option<PdfBookmark>, depth: usize, items: &mut Vec<OutlineItem>) {
+    while let Some(bookmark) = node {
+        if items.len() >= MAX_OUTLINE_ITEMS || depth > MAX_OUTLINE_DEPTH {
+            return;
+        }
+        let page = target_page(bookmark.destination(), bookmark.action());
+        items.push(OutlineItem {
+            title: bookmark.title().unwrap_or_default().trim().to_owned(),
+            depth,
+            page,
+        });
+        walk_outline(bookmark.first_child(), depth + 1, items);
+        node = bookmark.next_sibling();
+    }
+}
+
+/// The page a bookmark or link points to, through a destination or a
+/// go-to action.
+fn target_page(destination: Option<PdfDestination>, action: Option<PdfAction>) -> Option<usize> {
+    let page = match destination {
+        Some(d) => d.page_index().ok()?,
+        None => action?
+            .as_local_destination_action()?
+            .destination()
+            .ok()?
+            .page_index()
+            .ok()?,
+    };
+    usize::try_from(page).ok()
+}
+
+fn link_at(doc: &PdfDocument, page: usize, (x, y): (f32, f32)) -> Option<LinkTarget> {
+    let pdf_page = load_page(doc, page).ok()?;
+    let (w, h) = (pdf_page.width().value, pdf_page.height().value);
+    let links = pdf_page.links();
+    let link = links.link_at_point(PdfPoints::new(x * w), PdfPoints::new(h - y * h))?;
+    if let Some(page) = target_page(link.destination(), link.action()) {
+        return Some(LinkTarget::Page(page));
+    }
+    let uri = link.action()?.as_uri_action()?.uri().ok()?;
+    safe_uri(&uri).then_some(LinkTarget::Uri(uri))
+}
+
+/// Only web and mail links are opened; a PDF must not be able to launch
+/// programs or local files.
+fn safe_uri(uri: &str) -> bool {
+    let lower = uri.to_ascii_lowercase();
+    ["http://", "https://", "mailto:"]
+        .iter()
+        .any(|scheme| lower.starts_with(scheme))
+        && !uri.chars().any(|c| c.is_control() || c == '"')
 }
 
 fn page_count(doc: &PdfDocument) -> usize {
@@ -524,6 +647,16 @@ mod tests {
     }
 
     #[test]
+    fn only_web_links_are_safe() {
+        assert!(safe_uri("https://example.com"));
+        assert!(safe_uri("MAILTO:a@b.c"));
+        assert!(!safe_uri("file:///C:/Windows/System32/cmd.exe"));
+        assert!(!safe_uri("javascript:alert(1)"));
+        assert!(!safe_uri(" https://x.com"));
+        assert!(!safe_uri("https://x\n.com"));
+    }
+
+    #[test]
     fn invert_softens() {
         let mut px = [255, 0, 128, 77];
         invert(&mut px);
@@ -538,7 +671,9 @@ mod tests {
             return;
         };
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/two-pages.pdf");
-        let (doc, sizes) = open(&pdfium, &path).unwrap();
+        let (doc, sizes) = open(&pdfium, &path, None).unwrap();
+        assert!(outline(&doc).is_empty());
+        assert_eq!(link_at(&doc, 0, (0.5, 0.5)), None);
         assert_eq!(sizes, vec![(200.0, 300.0); 2]);
         let bitmap = render(&doc, 1, 100, false).unwrap();
         assert_eq!((bitmap.width, bitmap.height), (100, 150));

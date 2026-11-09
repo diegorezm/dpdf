@@ -14,10 +14,10 @@ use crate::config::{parse_color, DefaultZoom};
 use crate::keymap::Action;
 use crate::layout::{self, Layout, Zoom};
 use crate::nav;
-use crate::pdf::{Bitmap, NormRect, Request, Worker};
+use crate::pdf::{Bitmap, LinkTarget, NormRect, OutlineItem, Request, Worker};
 use crate::search::SearchState;
 use crate::store::{Recent, Store};
-use crate::{AppWindow, Highlight, Mark, PageView, RecentItem, ThumbView};
+use crate::{AppWindow, Highlight, Mark, PageView, RecentItem, SideItem, ThumbView};
 
 /// Pages rendered ahead of and behind the visible ones.
 const PRELOAD: usize = 2;
@@ -64,6 +64,32 @@ pub enum PopupOutcome {
     Copied,
 }
 
+/// What the sidebar shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SidePanel {
+    Thumbs,
+    Outline,
+    Notes,
+}
+
+impl SidePanel {
+    pub fn name(self) -> &'static str {
+        match self {
+            SidePanel::Thumbs => "thumbs",
+            SidePanel::Outline => "outline",
+            SidePanel::Notes => "notes",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Self {
+        match name {
+            "outline" => SidePanel::Outline,
+            "notes" => SidePanel::Notes,
+            _ => SidePanel::Thumbs,
+        }
+    }
+}
+
 pub struct Viewer {
     worker: Worker,
     pub store: Store,
@@ -104,6 +130,17 @@ pub struct Viewer {
     note_target: Option<u64>,
 
     recent: Rc<VecModel<RecentItem>>,
+
+    outline: Vec<OutlineItem>,
+    /// Page labels, empty when the document has none.
+    labels: Vec<String>,
+    side_panel: SidePanel,
+    side_items: Rc<VecModel<SideItem>>,
+    /// The page each side item jumps to.
+    side_pages: Vec<usize>,
+    /// Passwords typed this run, so switching tabs doesn't ask again.
+    /// Never written to disk.
+    passwords: HashMap<PathBuf, String>,
 }
 
 impl Viewer {
@@ -114,6 +151,8 @@ impl Viewer {
         window.set_pages(pages.clone().into());
         window.set_thumbs(thumbs.clone().into());
         window.set_recent(recent.clone().into());
+        let side_items = Rc::new(VecModel::default());
+        window.set_side_items(side_items.clone().into());
         let colors: Vec<Color> = annotations::COLORS
             .iter()
             .map(|(_, hex)| to_color(hex))
@@ -150,6 +189,12 @@ impl Viewer {
             popup: Popup::None,
             note_target: None,
             recent,
+            outline: Vec::new(),
+            labels: Vec::new(),
+            side_panel: SidePanel::Thumbs,
+            side_items,
+            side_pages: Vec::new(),
+            passwords: HashMap::new(),
         };
         viewer.update_recent();
         viewer
@@ -177,8 +222,24 @@ impl Viewer {
         }
         window.set_status("".into());
         self.pending = Some(path.clone());
-        self.worker.send(Request::Open(path));
+        let password = self.passwords.get(&path).cloned();
+        self.worker.send(Request::Open { path, password });
         true
+    }
+
+    /// Retries opening an encrypted document with a password.
+    pub fn open_with_password(&mut self, path: PathBuf, password: String) {
+        self.passwords.insert(path.clone(), password.clone());
+        self.pending = Some(path.clone());
+        self.worker.send(Request::Open {
+            path,
+            password: Some(password),
+        });
+    }
+
+    /// Whether the worker is waiting on this path, e.g. for a password.
+    pub fn is_pending(&self, path: &Path) -> bool {
+        self.pending.as_deref() == Some(path)
     }
 
     /// Back to the start screen.
@@ -189,16 +250,26 @@ impl Viewer {
         self.title.clear();
         self.reset_document_state(window);
         self.page_sizes.clear();
+        self.outline.clear();
+        self.labels.clear();
+        self.update_side_items();
         self.layout = Layout::default();
         self.thumb_layout = Layout::default();
         window.set_page_count(0);
+        window.set_page_label("".into());
         window.set_current_page(0);
         window.set_document_title("".into());
         self.refresh(window);
         self.update_recent();
     }
 
-    pub fn opened(&mut self, window: &AppWindow, title: String, page_sizes: Vec<(f32, f32)>) {
+    pub fn opened(
+        &mut self,
+        window: &AppWindow,
+        title: String,
+        page_sizes: Vec<(f32, f32)>,
+        outline: Vec<OutlineItem>,
+    ) {
         self.remember_position();
         self.path = self.pending.take();
         let restored = self
@@ -209,6 +280,9 @@ impl Viewer {
 
         self.title = title;
         self.page_sizes = page_sizes;
+        self.outline = outline;
+        self.labels.clear();
+        window.set_page_label("".into());
         self.zoom = restored.as_ref().map_or(self.default_zoom, |r| r.zoom);
         self.current_page = 0;
         self.layout = Layout::default();
@@ -234,6 +308,7 @@ impl Viewer {
         }
         self.remember_position();
         self.update_recent();
+        self.update_side_items();
     }
 
     fn reset_document_state(&mut self, window: &AppWindow) {
@@ -374,6 +449,10 @@ impl Viewer {
         if current != self.current_page || window.get_current_page() == 0 {
             self.current_page = current;
             window.set_current_page(ui_int(current + 1));
+            self.update_page_label(window);
+            if self.side_panel == SidePanel::Outline {
+                self.update_side_items();
+            }
             self.reveal_thumb(window, current);
             // Saved on every page change so the position survives a crash.
             self.remember_position();
@@ -494,7 +573,13 @@ impl Viewer {
     }
 
     pub fn go_to_typed_page(&mut self, window: &AppWindow, text: &str) {
-        if let Some(page) = nav::parse_page(text, self.page_sizes.len()) {
+        let text = text.trim();
+        // A label like "iv" or "A-3" wins over a page number.
+        let labelled = self
+            .labels
+            .iter()
+            .position(|label| !label.is_empty() && label.eq_ignore_ascii_case(text));
+        if let Some(page) = labelled.or_else(|| nav::parse_page(text, self.page_sizes.len())) {
             self.go_to_page(window, page);
         }
     }
@@ -578,6 +663,129 @@ impl Viewer {
         let max = (self.thumb_layout.content_height() - height).max(0.0);
         let target = rect.y - (height - rect.height) / 2.0;
         window.set_thumbs_viewport_y(-target.clamp(0.0, max));
+    }
+
+    // ----- Side panel, labels, links ----------------------------------------
+
+    pub fn side_panel(&self) -> SidePanel {
+        self.side_panel
+    }
+
+    pub fn set_side_panel(&mut self, window: &AppWindow, panel: SidePanel) {
+        self.side_panel = panel;
+        window.set_side_panel(panel.name().into());
+        self.update_side_items();
+        if panel == SidePanel::Thumbs {
+            self.shown_thumbs = None;
+            self.update_thumbs(window, true);
+        }
+    }
+
+    fn update_side_items(&mut self) {
+        let (items, pages): (Vec<SideItem>, Vec<usize>) = match self.side_panel {
+            SidePanel::Thumbs => Default::default(),
+            SidePanel::Outline => {
+                // The current section starts nearest before the page.
+                let current = self
+                    .outline
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, item)| Some((i, item.page?)))
+                    .filter(|(_, page)| *page <= self.current_page)
+                    .max_by_key(|(_, page)| *page)
+                    .map(|(i, _)| i);
+                self.outline
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, item)| {
+                        let page = item.page?;
+                        let row = SideItem {
+                            title: item.title.as_str().into(),
+                            detail: "".into(),
+                            depth: ui_int(item.depth.min(6)),
+                            current: current == Some(i),
+                            ..Default::default()
+                        };
+                        Some((row, page))
+                    })
+                    .unzip()
+            }
+            SidePanel::Notes => {
+                let mut notes: Vec<_> = self.annotations.items.iter().collect();
+                notes.sort_by(|a, b| {
+                    a.page.cmp(&b.page).then_with(|| {
+                        let y = |n: &annotations::Annotation| n.rects.first().map_or(0.0, |r| r.y);
+                        y(a).total_cmp(&y(b))
+                    })
+                });
+                notes
+                    .into_iter()
+                    .map(|a| {
+                        let page = self.page_name(a.page);
+                        let detail = if a.note.is_empty() {
+                            format!("p. {page}")
+                        } else {
+                            format!("p. {page} · {}", truncate(&a.note, 120))
+                        };
+                        let row = SideItem {
+                            title: truncate(&a.text, 140).into(),
+                            detail: detail.into(),
+                            depth: 0,
+                            color: to_color(annotations::color_hex(&a.color)),
+                            has_color: true,
+                            current: false,
+                        };
+                        (row, a.page)
+                    })
+                    .unzip()
+            }
+        };
+        self.side_items.set_vec(items);
+        self.side_pages = pages;
+    }
+
+    pub fn side_item_clicked(&mut self, window: &AppWindow, index: usize) {
+        if let Some(&page) = self.side_pages.get(index) {
+            self.go_to_page(window, page);
+        }
+    }
+
+    pub fn labels_found(&mut self, window: &AppWindow, labels: Vec<String>) {
+        if labels.len() == self.page_sizes.len() {
+            self.labels = labels;
+            self.update_page_label(window);
+            self.update_side_items();
+        }
+    }
+
+    /// The label of a page if it has one, else its number.
+    fn page_name(&self, page: usize) -> String {
+        match self.labels.get(page) {
+            Some(label) if !label.is_empty() => label.clone(),
+            _ => (page + 1).to_string(),
+        }
+    }
+
+    fn update_page_label(&self, window: &AppWindow) {
+        let name = self.page_name(self.current_page);
+        let shown = if name == (self.current_page + 1).to_string() {
+            String::new()
+        } else {
+            name
+        };
+        window.set_page_label(shown.into());
+    }
+
+    /// Follows a clicked link. Returns an external URI for the caller to open.
+    pub fn link(&mut self, window: &AppWindow, target: Option<LinkTarget>) -> Option<String> {
+        match target? {
+            LinkTarget::Page(page) if page < self.page_sizes.len() => {
+                self.go_to_page(window, page);
+                None
+            }
+            LinkTarget::Page(_) => None,
+            LinkTarget::Uri(uri) => Some(uri),
+        }
     }
 
     // ----- Search ----------------------------------------------------------
@@ -726,6 +934,11 @@ impl Viewer {
                     window.set_annotation_has_note(
                         self.annotations.get(id).is_some_and(|a| !a.note.is_empty()),
                     );
+                } else {
+                    self.worker.send(Request::LinkAt {
+                        page: drag.page,
+                        point: drag.from,
+                    });
                 }
                 self.refresh(window);
             }
@@ -906,6 +1119,9 @@ impl Viewer {
     }
 
     fn save_annotations(&mut self, window: &AppWindow) {
+        if self.side_panel == SidePanel::Notes {
+            self.update_side_items();
+        }
         let Some(path) = self.path.clone() else {
             return;
         };
@@ -1126,6 +1342,15 @@ fn model_or_default<T: Clone + 'static>(items: Vec<T>) -> ModelRc<T> {
         ModelRc::default()
     } else {
         Rc::new(VecModel::from(items)).into()
+    }
+}
+
+/// Shortens text to `max` characters, on a char boundary, with an ellipsis.
+fn truncate(text: &str, max: usize) -> String {
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    match text.char_indices().nth(max) {
+        Some((end, _)) => format!("{}…", &text[..end]),
+        None => text,
     }
 }
 

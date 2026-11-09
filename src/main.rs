@@ -92,6 +92,15 @@ fn main() -> Result<(), slint::PlatformError> {
     on!(window.on_thumbs_scrolled, |app, win| app
         .viewer()
         .thumbs_scrolled(&win));
+    on!(window.on_side_panel_clicked, |app, win, mode| app
+        .show_side_panel(
+            &win,
+            viewer::SidePanel::from_name(&mode),
+            false
+        ));
+    on!(window.on_side_item_clicked, |app, win, i| app
+        .viewer()
+        .side_item_clicked(&win, index(i)));
     on!(window.on_thumb_clicked, |app, win, page| app
         .viewer()
         .go_to_page(&win, index(page)));

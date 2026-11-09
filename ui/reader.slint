@@ -1,20 +1,101 @@
 import { Theme } from "theme.slint";
-import { PageView, ThumbView, RecentItem, TabItem } from "structs.slint";
-import { Button, Icon } from "widgets.slint";
+import { PageView, ThumbView, RecentItem, TabItem, SideItem } from "structs.slint";
+import { Button, Icon, TextButton } from "widgets.slint";
 
-// Scrollable column of page thumbnails. Rust positions only those near the
-// viewport.
+// Page thumbnails, the outline, or the notes list. Rust positions only
+// the thumbnails near the viewport.
 export component Sidebar inherits Rectangle {
     in property <[ThumbView]> thumbs;
     in property <int> current-page;
     in property <length> content-height;
     in-out property <length> viewport-y;
+    // "thumbs", "outline", or "notes".
+    in property <string> mode;
+    in property <[SideItem]> items;
     callback clicked(int);
+    callback mode-clicked(string);
+    callback item-clicked(int);
 
     width: Theme.sidebar-width;
     background: Theme.surface;
 
-    Flickable {
+    tabs := HorizontalLayout {
+        y: 0;
+        height: 32px;
+        padding-left: 4px;
+        padding-right: 4px;
+        alignment: center;
+
+        for tab in [{ id: "thumbs", label: "Pages" }, { id: "outline", label: "Outline" }, { id: "notes", label: "Notes" }]: TextButton {
+            y: (parent.height - self.height) / 2;
+            text: tab.label;
+            font-size: Theme.font-size-small;
+            active: root.mode == tab.id;
+            clicked => {
+                root.mode-clicked(tab.id);
+            }
+        }
+    }
+
+    if root.mode != "thumbs": Flickable {
+        y: tabs.height;
+        height: parent.height - tabs.height;
+        content-height: list.preferred-height;
+
+        list := VerticalLayout {
+            padding: 6px;
+            alignment: start;
+
+            if root.items.length == 0: Text {
+                text: root.mode == "outline" ? "No outline" : "No notes yet";
+                color: Theme.text-muted;
+                font-size: Theme.font-size-small;
+                horizontal-alignment: center;
+            }
+            for item[i] in root.items: Rectangle {
+                height: row.preferred-height;
+                border-radius: Theme.radius;
+                background: touch.has-hover ? Theme.hover : transparent;
+
+                row := HorizontalLayout {
+                    padding: 5px;
+                    padding-left: 6px + item.depth * 10px;
+                    spacing: 6px;
+
+                    if item.has-color: Rectangle {
+                        width: 3px;
+                        border-radius: 1.5px;
+                        background: item.color;
+                    }
+                    VerticalLayout {
+                        Text {
+                            text: item.title;
+                            color: item.current ? Theme.accent : Theme.text;
+                            font-size: Theme.font-size-small;
+                            wrap: word-wrap;
+                        }
+                        if item.detail != "": Text {
+                            text: item.detail;
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-small;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+
+                touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.item-clicked(i);
+                    }
+                }
+            }
+        }
+    }
+
+    if root.mode == "thumbs": Flickable {
+        y: tabs.height;
+        height: parent.height - tabs.height;
         content-height: root.content-height;
         content-y <=> root.viewport-y;
 

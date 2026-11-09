@@ -39,7 +39,10 @@ actions! {
     PreviousMatch => "previous-match", "Previous search match";
     GoToPage => "go-to-page", "Go to page…";
     Settings => "settings", "Settings";
-    ToggleSidebar => "toggle-sidebar", "Toggle thumbnail sidebar";
+    ToggleSidebar => "toggle-sidebar", "Toggle sidebar";
+    ShowThumbnails => "show-thumbnails", "Show page thumbnails";
+    ShowOutline => "show-outline", "Show outline";
+    ShowNotes => "show-notes", "Show notes list";
     FocusMode => "focus-mode", "Toggle focus mode";
     Fullscreen => "fullscreen", "Toggle fullscreen";
     ZoomIn => "zoom-in", "Zoom in";
@@ -85,6 +88,9 @@ const DEFAULT_KEYS: &[(Action, &str)] = &[
     (Action::GoToPage, "ctrl+p"),
     (Action::Settings, "ctrl+,"),
     (Action::ToggleSidebar, "ctrl+b"),
+    (Action::ShowThumbnails, "ctrl+shift+t"),
+    (Action::ShowOutline, "ctrl+shift+o"),
+    (Action::ShowNotes, "ctrl+shift+a"),
     (Action::FocusMode, "ctrl+."),
     (Action::Fullscreen, "f11"),
     (Action::ZoomIn, "ctrl+="),
@@ -439,7 +445,8 @@ mod tests {
         let (mut km, problems) = Keymap::new(false, &BTreeMap::new());
         assert!(problems.is_empty());
         assert_eq!(press(&mut km, "o", true, false), Some(Action::Open));
-        assert_eq!(press(&mut km, "O", true, true), None);
+        assert_eq!(press(&mut km, "O", true, true), Some(Action::ShowOutline));
+        assert_eq!(press(&mut km, "Q", true, true), None);
         assert_eq!(
             press(&mut km, &key(Key::PageDown), false, false),
             Some(Action::NextPage)
