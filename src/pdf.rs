@@ -147,6 +147,24 @@ struct Queue {
 /// A pending selection: drag start and end, as pages and points.
 type SelectJob = ((usize, (f32, f32)), (usize, (f32, f32)));
 
+/// Documents kept open, so switching between tabs doesn't reparse them.
+/// PDFium loads pages lazily, so an idle open document is cheap.
+const OPEN_DOCUMENTS: usize = 4;
+
+/// An open document and what's needed to hand it out again.
+struct OpenDoc<'a> {
+    path: PathBuf,
+    /// To notice the file changing on disk.
+    modified: Option<std::time::SystemTime>,
+    doc: PdfDocument<'a>,
+    page_sizes: Vec<(f32, f32)>,
+    outline: Vec<OutlineItem>,
+}
+
+fn modified(path: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
 /// Pages a selection may span; bounds the work of a wild drag.
 const MAX_SELECT_PAGES: usize = 50;
 /// Pages whose character boxes are kept while dragging.
@@ -166,7 +184,8 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
             return;
         }
     };
-    let mut document: Option<PdfDocument> = None;
+    // Most recently opened first; the front one is the live document.
+    let mut documents: VecDeque<OpenDoc> = VecDeque::new();
     let mut renders = Queue::default();
     let mut thumbs = Queue::default();
     let mut search: Option<SearchJob> = None;
@@ -180,7 +199,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
     let mut select_line: Option<(usize, (f32, f32))> = None;
 
     loop {
-        let idle = document.is_none()
+        let idle = documents.is_empty()
             || (renders.pages.is_empty()
                 && thumbs.pages.is_empty()
                 && search.is_none()
@@ -210,11 +229,37 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 link = None;
                 char_cache.clear();
                 labels = None;
+                let stamp = modified(&path);
+                if let Some(i) = documents.iter().position(|d| d.path == path) {
+                    match documents.remove(i) {
+                        Some(open) if open.modified == stamp => documents.push_front(open),
+                        _ => {}
+                    }
+                }
+                if documents.front().is_some_and(|d| d.path == path) {
+                    if let Some(open) = documents.front() {
+                        labels = Some(Vec::with_capacity(open.page_sizes.len()));
+                        on_event(Event::Opened {
+                            title: file_title(&path),
+                            path,
+                            page_sizes: open.page_sizes.clone(),
+                            outline: open.outline.clone(),
+                        });
+                    }
+                    continue;
+                }
                 match open(&pdfium, &path, password.as_deref()) {
                     Ok((doc, page_sizes)) => {
                         let outline = outline(&doc);
                         labels = Some(Vec::with_capacity(page_sizes.len()));
-                        document = Some(doc);
+                        documents.push_front(OpenDoc {
+                            path: path.clone(),
+                            modified: stamp,
+                            doc,
+                            page_sizes: page_sizes.clone(),
+                            outline: outline.clone(),
+                        });
+                        documents.truncate(OPEN_DOCUMENTS);
                         on_event(Event::Opened {
                             title: file_title(&path),
                             path,
@@ -275,7 +320,9 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
             None => {}
         }
 
-        let Some(doc) = &document else { continue };
+        let Some(doc) = documents.front().map(|d| &d.doc) else {
+            continue;
+        };
 
         if let Some((page, point)) = link.take() {
             let target = link_at(doc, page, point);

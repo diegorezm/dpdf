@@ -96,6 +96,19 @@ impl SidePanel {
     }
 }
 
+/// What a document looked like when the user switched away from it, so
+/// switching back shows the same spot instantly instead of re-rendering.
+struct TabView {
+    path: PathBuf,
+    zoom: Zoom,
+    viewport: (f32, f32),
+    /// Only the pages around the viewport, so this stays small.
+    cache: HashMap<usize, (u32, Image)>,
+}
+
+/// Documents whose view is kept; matches the worker's open documents.
+const KEPT_VIEWS: usize = 4;
+
 pub struct Viewer {
     worker: Worker,
     pub store: Store,
@@ -137,6 +150,8 @@ pub struct Viewer {
     /// The annotation whose note is being edited.
     note_target: Option<u64>,
 
+    /// Views of recently left documents, most recent first.
+    tab_views: Vec<TabView>,
     recent: Rc<VecModel<RecentItem>>,
 
     outline: Vec<OutlineItem>,
@@ -200,6 +215,7 @@ impl Viewer {
             hovered: None,
             popup: Popup::None,
             note_target: None,
+            tab_views: Vec::new(),
             recent,
             outline: Vec::new(),
             labels: Vec::new(),
@@ -234,6 +250,7 @@ impl Viewer {
             return false;
         }
         window.set_status("".into());
+        self.keep_view(window);
         self.pending = Some(path.clone());
         let password = self.passwords.get(&path).cloned();
         self.worker.send(Request::Open { path, password });
@@ -276,6 +293,26 @@ impl Viewer {
         self.update_recent();
     }
 
+    /// Remembers the open document's view for switching back to it.
+    fn keep_view(&mut self, window: &AppWindow) {
+        let Some(path) = self.path.clone() else {
+            return;
+        };
+        self.tab_views.retain(|v| v.path != path);
+        self.tab_views.insert(
+            0,
+            TabView {
+                path,
+                zoom: self.zoom,
+                viewport: (window.get_viewport_x(), window.get_viewport_y()),
+                // Images are shared, so this copies no pixels; the old pages stay
+                // on screen until the next document arrives.
+                cache: self.cache.clone(),
+            },
+        );
+        self.tab_views.truncate(KEPT_VIEWS);
+    }
+
     pub fn opened(
         &mut self,
         window: &AppWindow,
@@ -291,12 +328,21 @@ impl Viewer {
             .and_then(|path| self.store.recent_for(path))
             .cloned();
 
+        let kept = self.path.as_deref().and_then(|path| {
+            let i = self.tab_views.iter().position(|v| v.path == path)?;
+            Some(self.tab_views.remove(i))
+        });
+
         self.title = title;
         self.page_sizes = page_sizes;
         self.outline = outline;
         self.labels.clear();
         window.set_page_label("".into());
-        self.zoom = restored.as_ref().map_or(self.default_zoom, |r| r.zoom);
+        self.zoom = kept
+            .as_ref()
+            .map(|v| v.zoom)
+            .or(restored.as_ref().map(|r| r.zoom))
+            .unwrap_or(self.default_zoom);
         self.current_page = 0;
         self.layout = Layout::default();
         self.thumb_layout = Layout::default();
@@ -314,10 +360,17 @@ impl Viewer {
         window.set_viewport_x(0.0);
         window.set_viewport_y(0.0);
         window.set_thumbs_viewport_y(0.0);
-        self.relayout(window);
-
-        if let Some(page) = restored.map(|r| r.page) {
-            self.go_to_page(window, page.min(self.page_sizes.len().saturating_sub(1)));
+        if let Some(view) = kept {
+            // Same pixels as when the user left: no blank pages, no jump.
+            self.cache = view.cache;
+            window.set_viewport_x(view.viewport.0);
+            window.set_viewport_y(view.viewport.1);
+            self.relayout(window);
+        } else {
+            self.relayout(window);
+            if let Some(page) = restored.map(|r| r.page) {
+                self.go_to_page(window, page.min(self.page_sizes.len().saturating_sub(1)));
+            }
         }
         self.remember_position();
         self.update_recent();
@@ -379,6 +432,8 @@ impl Viewer {
     pub fn set_inverted(&mut self, window: &AppWindow, inverted: bool) {
         self.worker.send(Request::SetInverted(inverted));
         self.cache.clear();
+        // Kept pages were rendered with the old colors.
+        self.tab_views.clear();
         self.thumb_cache.clear();
         self.last_request = None;
         self.last_thumb_request = None;
