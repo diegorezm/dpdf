@@ -741,6 +741,47 @@ mod tests {
         assert_eq!(px, [24, 230, 126, 77]);
     }
 
+    /// Timings for a large document: `DPDF_BENCH_PDF=<file> cargo test
+    /// --release bench_document -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn bench_document() {
+        use std::time::Instant;
+        let (Ok(pdfium), Ok(path)) = (bind(), std::env::var("DPDF_BENCH_PDF")) else {
+            eprintln!("needs PDFium and DPDF_BENCH_PDF");
+            return;
+        };
+        let ms = |t: Instant| t.elapsed().as_secs_f64() * 1000.0;
+
+        let t = Instant::now();
+        let (doc, sizes) = open(&pdfium, Path::new(&path), None).unwrap();
+        println!("open, {} pages: {:.1} ms", sizes.len(), ms(t));
+        let t = Instant::now();
+        let items = outline(&doc).len();
+        println!("outline, {items} items: {:.1} ms", ms(t));
+
+        let pages: Vec<usize> = (0..sizes.len())
+            .step_by((sizes.len() / 20).max(1))
+            .collect();
+        for (label, width) in [("page render 1600 px", 1600), ("thumbnail 180 px", 180)] {
+            let t = Instant::now();
+            for &page in &pages {
+                render(&doc, page, width, false).unwrap();
+            }
+            println!("{label}: {:.1} ms avg", ms(t) / pages.len() as f64);
+        }
+        let t = Instant::now();
+        for page in 0..sizes.len() {
+            search_page(&doc, page, "holmes").unwrap();
+        }
+        println!("search all pages: {:.0} ms", ms(t));
+        let t = Instant::now();
+        for page in 0..sizes.len() {
+            let _ = load_page(&doc, page).map(|p| p.label().map(str::to_owned));
+        }
+        println!("page labels: {:.0} ms", ms(t));
+    }
+
     /// Needs PDFium; skipped when the library can't be loaded.
     #[test]
     fn opens_and_renders_fixture() {

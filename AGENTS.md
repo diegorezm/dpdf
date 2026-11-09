@@ -61,11 +61,12 @@ Built after the MVP, because they serve the core use (studying documents):
 - Tabs and named sessions (tmux-like: each session has its own tabs; dpdf reattaches to the last one on startup).
 - Annotations (highlight, underline, strikethrough, notes) stored outside the PDF, with Markdown export.
 - Focus mode, command palette, TOML themes and keybindings, optional vim keys.
+- Outline and notes panels in the sidebar, clickable links, page labels, password-protected PDFs.
 
 Customizability is part of dpdf's identity: themes and keys are plain files, and every action is reachable from the palette. New options still have to earn their place; prefer a file-only option over another visible control.
 
 Deferred — may come later, must stay optional, local, and non-intrusive:
-- Bookmarks UI, outline/TOC panel, an annotations list panel.
+- Bookmarks UI.
 - Page manipulation (merge, split, rotate, extract) via `lopdf`.
 - Presentation mode, writing annotations into the PDF itself.
 
