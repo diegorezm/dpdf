@@ -192,6 +192,23 @@ fn main() -> Result<(), slint::PlatformError> {
         slint::CloseRequestResponse::HideWindow
     });
 
+    // Dropping PDFs on the window opens them, like Ctrl+O.
+    {
+        use slint::winit_030::{winit::event::WindowEvent, EventResult, WinitWindowAccessor};
+        let weak = window.as_weak();
+        window.window().on_winit_window_event(move |_, event| {
+            if let WindowEvent::DroppedFile(path) = event {
+                let is_pdf = path
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"));
+                if let (true, Some(win)) = (is_pdf, weak.upgrade()) {
+                    with_app(|app| app.open_path(&win, path.clone()));
+                }
+            }
+            EventResult::Propagate
+        });
+    }
+
     app::paint_title_bars_soon(window.as_weak());
 
     window.run()?;

@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 # raw-window-handle: to color the native title bar from the theme.
-slint = { version = "1.18", features = ["raw-window-handle-06"] }
+slint = { version = "1.18", features = ["raw-window-handle-06", "unstable-winit-030"] }
 raw-window-handle = "0.6"
 # Native "Open file" dialog.
 rfd = "0.18"
