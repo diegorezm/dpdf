@@ -117,6 +117,10 @@ Core defaults: `Ctrl+O` open, `Ctrl+K` palette, `Ctrl+F` search, `Ctrl+P` go to 
 - Targets (guidelines, measure before claiming): cold start to window < 300 ms; idle RSS with no document < 50 MB; release binary stays small (`lto`, `strip`, `opt-level`).
 - Any change touching rendering, caching, or scrolling should state its performance impact in the commit/PR. Prefer `perf:` commits with before/after numbers.
 - Measure with the ignored benchmark test (open, render, invert, search, labels): `DPDF_BENCH_PDF=<file.pdf> cargo test --release bench_document -- --ignored --nocapture`.
+- Possible improvements, not worth it yet (measure first):
+  - Free the `lopdf` document used by `recover.rs` when its document leaves the front tab, keeping recovered glyphs. Saves about the file size per recent tab with broken fonts; costs one re-parse when selecting a new page there later.
+  - Tiled rendering past the 24 MP render cap, so deep zoom stays sharp.
+  - Search inside recovered formulas (search uses PDFium text only).
 
 ## 10. Architecture
 
