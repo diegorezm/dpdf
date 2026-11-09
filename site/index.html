@@ -23,14 +23,31 @@
   <a class="button primary" href="https://github.com/diegorezm/dpdf/releases">Download</a>
   <a class="button" href="docs.html">Read the docs</a>
 
-  <h2>What it <em>does</em></h2>
+  <img class="shot hero-shot" src="shots/reader.png" alt="dpdf showing a document with the thumbnail sidebar">
+
+  <section class="feature">
+    <div><h2>Find it <em>fast</em></h2><p>Search the whole document with <kbd>Ctrl+F</kbd>. Matches light up on the page; <kbd>Enter</kbd> walks through them.</p></div>
+    <img class="shot" src="shots/search.png" alt="Search with highlighted matches" loading="lazy">
+  </section>
+  <section class="feature">
+    <div><h2>Every command, <em>one key</em></h2><p>The palette (<kbd>Ctrl+K</kbd>) reaches every action, open tab, recent file, and theme with fuzzy matching. Type a number to jump to that page.</p></div>
+    <img class="shot" src="shots/palette.png" alt="Command palette filtering themes" loading="lazy">
+  </section>
+  <section class="feature">
+    <div><h2>Nothing but <em>the page</em></h2><p>Focus mode (<kbd>Ctrl+.</kbd>) hides tabs, sidebar, and header. Just you and the text.</p></div>
+    <img class="shot" src="shots/focus.png" alt="Focus mode with only the page visible" loading="lazy">
+  </section>
+  <section class="feature">
+    <div><h2>Dark or <em>light</em></h2><p>Ten built-in themes, and your own in plain TOML. Keybindings too, with optional vim keys.</p></div>
+    <img class="shot" src="shots/themes.png" alt="dpdf with the light Paper theme" loading="lazy">
+  </section>
+
+  <h2>And also</h2>
   <div class="spread">
-    <div class="box"><h3>Reading</h3><p>Continuous scrolling, fit width or page, thumbnails, go to page, fullscreen, and a focus mode that hides everything but the text.</p></div>
     <div class="box"><h3>Tabs and sessions</h3><p>Open several PDFs at once. dpdf reopens every tab at the page and zoom you left it, like reattaching to tmux.</p></div>
     <div class="box"><h3>Annotations</h3><p>Highlight, underline, strike through, and attach notes. Export them as Markdown. The PDF is never modified.</p></div>
-    <div class="box"><h3>Keyboard first</h3><p>Every action has a shortcut and lives in the command palette (<kbd>Ctrl+K</kbd>). Optional vim keys.</p></div>
-    <div class="box"><h3>Yours to shape</h3><p>Themes and keybindings are plain TOML files. Dark by default, light as a peer.</p></div>
-    <div class="box"><h3>Private</h3><p>No telemetry, no accounts, no network. Native Rust and Slint, no browser engine inside.</p></div>
+    <div class="box"><h3>Private</h3><p>No telemetry, no accounts, no network. Everything stays on your machine.</p></div>
+    <div class="box"><h3>Native</h3><p>Rust, Slint, and PDFium. No browser engine inside, small binary, instant start.</p></div>
   </div>
 
   <blockquote>Fast, lightweight, calm.<small>The dpdf philosophy</small></blockquote>

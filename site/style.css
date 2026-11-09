@@ -14,19 +14,37 @@
 
 body {
   margin: 0;
-  background: var(--cover);
+  background: var(--paper);
   color: var(--ink);
   font: 17px/1.6 var(--sans);
 }
 
-/* The page sits on a graphite cover, like dpdf's own reading area. */
+/* Content is centered for readability; the page itself spans the screen. */
 .book {
-  max-width: 980px;
-  margin: 32px auto;
-  padding: 56px 64px;
-  background: var(--paper);
-  border-radius: 6px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 48px 56px;
 }
+
+.shot {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #0000001a, 0 20px 50px -20px #00000059;
+}
+.hero-shot { margin-top: 56px; }
+
+.feature {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 48px;
+  align-items: center;
+  margin-top: 72px;
+}
+.feature:nth-of-type(even) { grid-template-columns: 2fr 1fr; }
+.feature:nth-of-type(even) .shot { order: -1; }
+.feature h2 { margin-top: 0; }
+.feature p { color: var(--ink-soft); margin: 0; }
 
 nav {
   display: flex;
@@ -89,7 +107,9 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--lin
 footer { margin-top: 80px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 14px; color: var(--ink-soft); }
 
 @media (max-width: 720px) {
-  .book { margin: 0; padding: 32px 16px; border-radius: 0; }
+  .book { padding: 32px 16px; }
+  .feature, .feature:nth-of-type(even) { grid-template-columns: 1fr; gap: 20px; margin-top: 48px; }
+  .feature:nth-of-type(even) .shot { order: 0; }
   .spread { grid-template-columns: 1fr; gap: 16px; }
   nav { margin-bottom: 40px; }
 }
