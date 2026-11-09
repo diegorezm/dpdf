@@ -312,7 +312,13 @@ impl App {
             }
             "vim" => self.config.vim = on,
             "reset" => {
-                self.config = Config::default();
+                // Custom key bindings are hand-written in config.toml;
+                // restoring visual defaults shouldn't wipe them.
+                self.config = Config {
+                    keys: std::mem::take(&mut self.config.keys),
+                    vim: self.config.vim,
+                    ..Config::default()
+                };
                 window.set_sidebar_visible(self.config.sidebar);
             }
             "reload" => return self.reload_config(window),
