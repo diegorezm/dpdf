@@ -131,6 +131,8 @@ pub struct Viewer {
     history: History,
     selection: Option<Selection>,
     drag: Option<Drag>,
+    /// The annotation whose note tooltip is showing.
+    hovered: Option<u64>,
     popup: Popup,
     /// The annotation whose note is being edited.
     note_target: Option<u64>,
@@ -195,6 +197,7 @@ impl Viewer {
             history: History::default(),
             selection: None,
             drag: None,
+            hovered: None,
             popup: Popup::None,
             note_target: None,
             recent,
@@ -446,6 +449,10 @@ impl Viewer {
     /// Like `refresh`, for scrolling: page items are only rebuilt when a
     /// different set of pages comes into range, so frames stay cheap.
     pub fn scrolled(&mut self, window: &AppWindow) {
+        // The tooltip would drift off its annotation.
+        if self.hovered.take().is_some() {
+            window.set_note_tip("".into());
+        }
         self.update(window, false);
     }
 
@@ -961,8 +968,42 @@ impl Viewer {
                 }
                 self.refresh(window);
             }
+            "hover" => self.hover(window, x, y),
+            "double" => {
+                if let Some((page, point)) = self.page_point(window, x, y) {
+                    self.popup = Popup::None;
+                    self.worker.send(Request::SelectLine { page, point });
+                }
+            }
             _ => {}
         }
+    }
+
+    /// Shows the note of the annotation under the mouse, if it has one.
+    fn hover(&mut self, window: &AppWindow, x: f32, y: f32) {
+        let hit = self.page_point(window, x, y).and_then(|(page, (px, py))| {
+            let id = self.annotations.at_point(page, px, py)?;
+            let a = self.annotations.get(id)?;
+            (!a.note.trim().is_empty()).then_some((id, a))
+        });
+        let id = hit.map(|(id, _)| id);
+        if id == self.hovered {
+            return;
+        }
+        self.hovered = id;
+        let Some((_, a)) = hit else {
+            window.set_note_tip("".into());
+            return;
+        };
+        // Anchor below the annotation's last line.
+        if let (Some(rect), Some(r)) = (self.layout.rect(a.page), a.rects.last()) {
+            window.set_note_tip_x(
+                rect.x + (r.x + r.width / 2.0) * rect.width + window.get_viewport_x(),
+            );
+            window
+                .set_note_tip_y(rect.y + (r.y + r.height) * rect.height + window.get_viewport_y());
+        }
+        window.set_note_tip(a.note.trim().into());
     }
 
     pub fn selected(&mut self, window: &AppWindow, parts: Vec<SelectionPart>) {
@@ -1070,8 +1111,13 @@ impl Viewer {
             .parts
             .into_iter()
             .map(|part| {
-                self.annotations
-                    .add(part.page, kind, color, part.text, part.rects, now)
+                let id = self
+                    .annotations
+                    .add(part.page, kind, color, part.text, part.rects, now);
+                if let Some(a) = self.annotations.get_mut(id) {
+                    a.line = part.line;
+                }
+                id
             })
             .reduce(|first, _| first)
     }
@@ -1148,9 +1194,15 @@ impl Viewer {
 
     /// The document's notes as Markdown, if it has any.
     pub fn notes_markdown(&self) -> Option<String> {
+        let file = self
+            .path
+            .as_deref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         (!self.annotations.items.is_empty()).then(|| {
             self.annotations
-                .to_markdown(&self.title, annotations::now())
+                .to_markdown(&self.title, &file, annotations::now())
         })
     }
 

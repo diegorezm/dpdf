@@ -69,6 +69,10 @@ export component AppWindow inherits Window {
 
     // Selection / annotation popup: "", "selection", or "annotation".
     in property <string> popup;
+    // The note of the annotation under the mouse, shown as a tooltip.
+    in property <string> note-tip;
+    in property <length> note-tip-x;
+    in property <length> note-tip-y;
     in property <length> popup-x;
     in property <length> popup-y;
     in property <[color]> annotation-colors;
@@ -356,6 +360,9 @@ export component AppWindow inherits Window {
                     item-clicked(i) => {
                         root.side-item-clicked(i);
                     }
+                    close-clicked => {
+                        root.header-action("sidebar");
+                    }
                 }
 
                 reader := Rectangle {
@@ -379,9 +386,15 @@ export component AppWindow inherits Window {
                                     root.reader-pointer("up", self.mouse-x, self.mouse-y);
                                 }
                             }
+                            if event.kind == PointerEventKind.move && !self.pressed {
+                                root.reader-pointer("hover", self.mouse-x, self.mouse-y);
+                            }
                         }
                         moved => {
                             root.reader-pointer("move", self.mouse-x, self.mouse-y);
+                        }
+                        double-clicked => {
+                            root.reader-pointer("double", self.mouse-x, self.mouse-y);
                         }
                         scroll-event(event) => {
                             if event.modifiers.control {
@@ -436,6 +449,24 @@ export component AppWindow inherits Window {
                                     root.prompt-accepted(self.text);
                                 }
                             }
+                        }
+                    }
+
+                    // Note tooltip, below the hovered annotation.
+                    if root.note-tip != "" && root.popup == "": Panel {
+                        width: min(360px, tip-text.preferred-width + 24px);
+                        height: tip-text.preferred-height + 16px;
+                        x: max(8px, min(parent.width - self.width - 8px, root.note-tip-x - self.width / 2));
+                        y: min(parent.height - self.height - 8px, root.note-tip-y + 6px);
+
+                        tip-text := Text {
+                            x: 12px;
+                            y: 8px;
+                            width: parent.width - 24px;
+                            text: root.note-tip;
+                            color: Theme.text;
+                            font-size: Theme.font-size-small;
+                            wrap: word-wrap;
                         }
                     }
 

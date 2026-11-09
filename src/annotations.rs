@@ -45,6 +45,9 @@ pub struct Annotation {
     pub text: String,
     #[serde(default)]
     pub note: String,
+    /// One-based line on the page where it starts; 0 if unknown.
+    #[serde(default)]
+    pub line: u32,
     /// Unix seconds.
     pub created: u64,
     pub rects: Vec<NormRect>,
@@ -96,6 +99,7 @@ impl Annotations {
             color: color.to_owned(),
             text,
             note: String::new(),
+            line: 0,
             created: now,
             rects,
         });
@@ -130,8 +134,12 @@ impl Annotations {
             .map(|a| a.id)
     }
 
-    /// Notes as Markdown, in reading order.
-    pub fn to_markdown(&self, title: &str, exported: u64) -> String {
+    /// Notes as Markdown for Obsidian, in reading order. `file` is the
+    /// PDF's file name: each quote links to its page with
+    /// `[[file#page=N]]`, which Obsidian opens at that page when the PDF is
+    /// in the vault, and carries a `^dpdf-<id>` block id that stays the
+    /// same across exports, so other notes can link to single quotes.
+    pub fn to_markdown(&self, title: &str, file: &str, exported: u64) -> String {
         let mut items: Vec<&Annotation> = self.items.iter().collect();
         items.sort_by(|a, b| {
             let top = |x: &Annotation| x.rects.first().map_or(0.0, |r| r.y);
@@ -139,8 +147,11 @@ impl Annotations {
         });
 
         let mut out = format!(
-            "# {title}\n\n_Notes exported from dpdf on {}._\n",
-            date(exported)
+            "---\ntitle: \"{}\"\nsource: \"[[{}]]\"\nexported: {}\nannotations: {}\ntags:\n  - dpdf\n---\n\n# {title}\n",
+            yaml_escape(title),
+            yaml_escape(file),
+            date(exported),
+            items.len(),
         );
         let mut page = None;
         for a in items {
@@ -149,15 +160,22 @@ impl Annotations {
                 let _ = write!(out, "\n## Page {}\n", a.page + 1);
             }
             let text = a.text.split_whitespace().collect::<Vec<_>>().join(" ");
-            out.push('\n');
-            match a.kind {
-                Kind::Strikethrough => {
-                    let _ = writeln!(out, "> ~~{text}~~");
-                }
-                Kind::Highlight | Kind::Underline => {
-                    let _ = writeln!(out, "> {text}");
-                }
-            }
+            let text = match a.kind {
+                Kind::Strikethrough => format!("~~{text}~~"),
+                Kind::Highlight | Kind::Underline => text,
+            };
+            let place = if a.line > 0 {
+                format!("p. {}, line {}", a.page + 1, a.line)
+            } else {
+                format!("p. {}", a.page + 1)
+            };
+            let _ = write!(
+                out,
+                "\n> [!quote|{}] [[{file}#page={}|{place}]]\n> {text}\n\n^dpdf-{}\n",
+                a.color,
+                a.page + 1,
+                a.id,
+            );
             if !a.note.trim().is_empty() {
                 out.push('\n');
                 out.push_str(a.note.trim());
@@ -166,6 +184,11 @@ impl Annotations {
         }
         out
     }
+}
+
+/// Escapes a string for a double-quoted YAML scalar.
+fn yaml_escape(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Undo and redo for annotation changes. Each entry is a snapshot of the
@@ -324,12 +347,20 @@ mod tests {
         if let Some(item) = a.get_mut(late) {
             item.note = "My thought.".into();
         }
-        let md = a.to_markdown("Book", 0);
+        if let Some(item) = a.get_mut(late) {
+            item.line = 7;
+        }
+        let md = a.to_markdown("Book \"2\"", "book.pdf", 0);
         assert_eq!(
             md,
-            "# Book\n\n_Notes exported from dpdf on 1970-01-01._\n\
-             \n## Page 2\n\n> first\n\n> ~~gone text~~\n\
-             \n## Page 5\n\n> later\n\nMy thought.\n"
+            "---\ntitle: \"Book \\\"2\\\"\"\nsource: \"[[book.pdf]]\"\nexported: 1970-01-01\n\
+             annotations: 3\ntags:\n  - dpdf\n---\n\n# Book \"2\"\n\
+             \n## Page 2\n\
+             \n> [!quote|yellow] [[book.pdf#page=2|p. 2]]\n> first\n\n^dpdf-3\n\
+             \n> [!quote|red] [[book.pdf#page=2|p. 2]]\n> ~~gone text~~\n\n^dpdf-2\n\
+             \n## Page 5\n\
+             \n> [!quote|yellow] [[book.pdf#page=5|p. 5, line 7]]\n> later\n\n^dpdf-1\n\
+             \nMy thought.\n"
         );
     }
 

@@ -30,6 +30,8 @@ pub enum Request {
         from: (usize, (f32, f32)),
         to: (usize, (f32, f32)),
     },
+    /// Selects the whole line of text nearest a point (double click).
+    SelectLine { page: usize, point: (f32, f32) },
     /// Invert page colors in future renders (dark reading).
     SetInverted(bool),
     /// Follows the link at a point on a page (page fractions), if any.
@@ -98,6 +100,8 @@ pub struct SelectionPart {
     /// One rect per line.
     pub rects: Vec<NormRect>,
     pub text: String,
+    /// One-based line on the page where the selection starts.
+    pub line: u32,
 }
 
 pub struct Bitmap {
@@ -173,6 +177,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
     // Labels collected so far, while some pages remain.
     let mut labels: Option<Vec<String>> = None;
     let mut link: Option<(usize, (f32, f32))> = None;
+    let mut select_line: Option<(usize, (f32, f32))> = None;
 
     loop {
         let idle = document.is_none()
@@ -180,6 +185,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 && thumbs.pages.is_empty()
                 && search.is_none()
                 && select.is_none()
+                && select_line.is_none()
                 && link.is_none()
                 && labels.is_none());
         let request = if idle {
@@ -241,7 +247,13 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 continue;
             }
             Some(Request::Select { from, to }) => {
+                select_line = None;
                 select = Some((from, to));
+                continue;
+            }
+            Some(Request::SelectLine { page, point }) => {
+                select = None;
+                select_line = Some((page, point));
                 continue;
             }
             Some(Request::LinkAt { page, point }) => {
@@ -268,20 +280,29 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
         if let Some((page, point)) = link.take() {
             let target = link_at(doc, page, point);
             on_event(Event::Link(target));
+        } else if let Some((page, point)) = select_line.take() {
+            let boxes = cached_chars(doc, &mut char_cache, page);
+            let parts = nearest_char(&boxes, point)
+                .and_then(|i| {
+                    let (a, b) = line_range(&boxes, i);
+                    select_range(&boxes, a, b)
+                })
+                .map(|(rects, text)| SelectionPart {
+                    page,
+                    rects,
+                    text,
+                    line: 0,
+                })
+                .into_iter()
+                .collect();
+            on_event(Event::Selection(number_lines(parts, |page| {
+                cached_chars(doc, &mut char_cache, page)
+            })));
         } else if let Some((from, to)) = select.take() {
-            let parts = select_pages(from, to, |page| {
-                if !char_cache.iter().any(|(p, _)| *p == page) {
-                    let boxes = char_boxes(doc, page).unwrap_or_default();
-                    char_cache.push_front((page, boxes));
-                    char_cache.truncate(CHAR_CACHE_PAGES);
-                }
-                char_cache
-                    .iter()
-                    .find(|(p, _)| *p == page)
-                    .map(|(_, boxes)| boxes.clone())
-                    .unwrap_or_default()
-            });
-            on_event(Event::Selection(parts));
+            let parts = select_pages(from, to, |page| cached_chars(doc, &mut char_cache, page));
+            on_event(Event::Selection(number_lines(parts, |page| {
+                cached_chars(doc, &mut char_cache, page)
+            })));
         } else if let Some(page) = renders.pages.pop_front() {
             let width_px = renders.width_px;
             match render(doc, page, width_px, inverted) {
@@ -500,6 +521,95 @@ fn char_boxes(doc: &PdfDocument, page: usize) -> Result<Vec<CharBox>, PdfiumErro
     Ok(boxes)
 }
 
+/// A page's character boxes, from the cache of recently selected pages.
+fn cached_chars(
+    doc: &PdfDocument,
+    cache: &mut VecDeque<(usize, Vec<CharBox>)>,
+    page: usize,
+) -> Vec<CharBox> {
+    if !cache.iter().any(|(p, _)| *p == page) {
+        let boxes = char_boxes(doc, page).unwrap_or_default();
+        cache.push_front((page, boxes));
+        cache.truncate(CHAR_CACHE_PAGES);
+    }
+    cache
+        .iter()
+        .find(|(p, _)| *p == page)
+        .map(|(_, boxes)| boxes.clone())
+        .unwrap_or_default()
+}
+
+/// The first and last character of the line holding `chars[index]`: the
+/// run of characters around it whose vertical centers overlap its own,
+/// stopping at line breaks.
+fn line_range(chars: &[CharBox], index: usize) -> (usize, usize) {
+    let Some(anchor) = chars.get(index).map(|ch| ch.rect) else {
+        return (index, index);
+    };
+    let center = anchor.y + anchor.height / 2.0;
+    let same_line = |ch: &CharBox| {
+        if ch.c == '\n' || ch.c == '\r' {
+            return Some(false);
+        }
+        // Spaces often have no box; they don't end the line.
+        if ch.rect.width <= 0.0 || ch.rect.height <= 0.0 {
+            return None;
+        }
+        let other = ch.rect.y + ch.rect.height / 2.0;
+        Some((center - other).abs() < anchor.height.max(ch.rect.height) / 2.0)
+    };
+    let mut a = index;
+    while a > 0 && same_line(&chars[a - 1]) != Some(false) {
+        a -= 1;
+    }
+    let mut b = index;
+    while b + 1 < chars.len() && same_line(&chars[b + 1]) != Some(false) {
+        b += 1;
+    }
+    (a, b)
+}
+
+/// Fills in the line each part starts on.
+fn number_lines(
+    mut parts: Vec<SelectionPart>,
+    mut chars: impl FnMut(usize) -> Vec<CharBox>,
+) -> Vec<SelectionPart> {
+    for part in &mut parts {
+        if let Some(first) = part.rects.first() {
+            part.line = line_at(&chars(part.page), first.y + first.height / 2.0);
+        }
+    }
+    parts
+}
+
+/// The one-based visual line at height `y` (page fraction): the number
+/// of distinct text lines whose centers are at or above it. Lines side by
+/// side, as in two columns, count once, so the number matches what a
+/// reader counts down the page.
+fn line_at(chars: &[CharBox], y: f32) -> u32 {
+    let mut lines: Vec<(f32, f32)> = chars
+        .iter()
+        .filter(|ch| ch.rect.width > 0.0 && ch.rect.height > 0.0 && !ch.c.is_whitespace())
+        .map(|ch| (ch.rect.y + ch.rect.height / 2.0, ch.rect.height))
+        .collect();
+    lines.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut count = 0;
+    let mut last: Option<(f32, f32)> = None;
+    for (center, height) in lines {
+        if center > y + height / 4.0 {
+            break;
+        }
+        match last {
+            Some((c, h)) if center - c < h.max(height) / 2.0 => {}
+            _ => {
+                count += 1;
+                last = Some((center, height));
+            }
+        }
+    }
+    count.max(1)
+}
+
 /// Selects text from one page point to another, possibly pages apart.
 /// `chars` gives a page's character boxes.
 fn select_pages(
@@ -514,6 +624,7 @@ fn select_pages(
                 page: from.0,
                 rects,
                 text,
+                line: 0,
             })
             .into_iter()
             .collect();
@@ -538,7 +649,12 @@ fn select_pages(
                 boxes.len().checked_sub(1)?
             };
             let (rects, text) = select_range(&boxes, a, b)?;
-            Some(SelectionPart { page, rects, text })
+            Some(SelectionPart {
+                page,
+                rects,
+                text,
+                line: 0,
+            })
         })
         .collect()
 }
@@ -706,6 +822,41 @@ mod tests {
         let (_, back) = select_text(&chars, (0.15, 0.21), (0.23, 0.11)).unwrap();
         assert_eq!(back, text);
         assert!(select_text(&[], (0.0, 0.0), (1.0, 1.0)).is_none());
+    }
+
+    #[test]
+    fn selects_a_whole_line() {
+        let mut chars = boxes("first line", 0.1);
+        chars.push(CharBox {
+            c: '\n',
+            rect: NormRect {
+                x: 0.0,
+                y: 0.0,
+                width: 0.0,
+                height: 0.0,
+            },
+        });
+        chars.extend(boxes("second", 0.2));
+        // A line without a break char ends where the height changes.
+        chars.extend(boxes("third", 0.3));
+        assert_eq!(line_range(&chars, 3), (0, 9));
+        let (a, b) = line_range(&chars, 13);
+        let (_, text) = select_range(&chars, a, b).unwrap();
+        assert_eq!(text, "second");
+        assert_eq!(line_range(&[], 0), (0, 0));
+    }
+
+    #[test]
+    fn counts_visual_lines() {
+        let mut chars = boxes("one", 0.1);
+        chars.extend(boxes("two", 0.2));
+        // A second column beside line two counts once.
+        chars.extend(boxes("col", 0.205));
+        chars.extend(boxes("three", 0.3));
+        assert_eq!(line_at(&chars, 0.115), 1);
+        assert_eq!(line_at(&chars, 0.215), 2);
+        assert_eq!(line_at(&chars, 0.315), 3);
+        assert_eq!(line_at(&[], 0.5), 1);
     }
 
     #[test]

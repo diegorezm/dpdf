@@ -134,6 +134,7 @@ fn main() -> Result<(), slint::PlatformError> {
             "home" => Action::Home,
             "sessions" => Action::SwitchSession,
             "new-session" => Action::NewSession,
+            "sidebar" => Action::ToggleSidebar,
             _ => Action::Open,
         };
         app.run(&win, action)

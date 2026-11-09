@@ -104,6 +104,9 @@ pub struct Config {
     pub thumbnail_size: ThumbnailSize,
     /// Adds vim-style keys (j/k, gg/G, ctrl+d/u, /, n/N, :).
     pub vim: bool,
+    /// Folder that "Export notes" writes into without asking, e.g. a
+    /// folder in an Obsidian vault. Empty asks where to save each time.
+    pub notes_folder: String,
     /// Overrides: action name -> key sequences, e.g. `open = ["ctrl+o"]`.
     /// An empty list unbinds the action.
     pub keys: BTreeMap<String, Vec<String>>,
@@ -123,6 +126,7 @@ impl Default for Config {
             corners: Corners::Rounded,
             thumbnail_size: ThumbnailSize::Medium,
             vim: false,
+            notes_folder: String::new(),
             keys: BTreeMap::new(),
         }
     }

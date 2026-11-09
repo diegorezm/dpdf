@@ -15,6 +15,7 @@ export component Sidebar inherits Rectangle {
     callback clicked(int);
     callback mode-clicked(string);
     callback item-clicked(int);
+    callback close-clicked();
 
     width: Theme.sidebar-width;
     background: Theme.surface;
@@ -33,6 +34,18 @@ export component Sidebar inherits Rectangle {
             active: root.mode == tab.id;
             clicked => {
                 root.mode-clicked(tab.id);
+            }
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+
+        TextButton {
+            y: (parent.height - self.height) / 2;
+            text: "×";
+            clicked => {
+                root.close-clicked();
             }
         }
     }

@@ -893,12 +893,19 @@ impl App {
             clear_status_later(window);
             return;
         };
-        let name = format!("{} - notes.md", self.viewer.title());
-        let target = rfd::FileDialog::new()
-            .set_title("Export notes")
-            .set_file_name(&name)
-            .add_filter("Markdown", &["md"])
-            .save_file();
+        let name = format!("{}.md", safe_file_name(self.viewer.title()));
+        // A configured folder (an Obsidian vault) is written without
+        // asking; re-exporting replaces the file with the current notes.
+        let folder = self.config.notes_folder.trim();
+        let target = if folder.is_empty() {
+            rfd::FileDialog::new()
+                .set_title("Export notes")
+                .set_file_name(&name)
+                .add_filter("Markdown", &["md"])
+                .save_file()
+        } else {
+            Some(std::path::Path::new(folder).join(&name))
+        };
         if let Some(path) = target {
             let message = match std::fs::write(&path, markdown) {
                 Ok(()) => format!("Notes exported to {}", file_name(&path)),
@@ -1143,9 +1150,35 @@ fn clear_status_later(window: &AppWindow) {
     });
 }
 
+/// `title` with the characters Windows forbids in file names replaced.
+fn safe_file_name(title: &str) -> String {
+    let name: String = title
+        .chars()
+        .map(|c| {
+            if r#"<>:"/\|?*"#.contains(c) || c.is_control() {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let name = name.trim().trim_end_matches('.').to_owned();
+    if name.is_empty() {
+        "notes".to_owned()
+    } else {
+        name
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn note_file_names_are_safe() {
+        assert_eq!(safe_file_name("a: b/c?"), "a- b-c-");
+        assert_eq!(safe_file_name(" ... "), "notes");
+    }
 
     #[test]
     fn settings_search() {
