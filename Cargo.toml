@@ -1,6 +1,6 @@
 [package]
 name = "dpdf"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "A fast, minimal, local-first PDF reader for Windows, built with Rust and Slint."
 license = "MIT"
