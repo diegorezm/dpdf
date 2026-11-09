@@ -6,6 +6,7 @@
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 
@@ -296,7 +297,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
     let mut last_search: Option<SearchJob> = None;
     let mut select: Option<SelectJob> = None;
     // Character boxes of recently selected pages, reused while dragging.
-    let mut char_cache: VecDeque<(usize, Vec<CharBox>)> = VecDeque::new();
+    let mut char_cache: VecDeque<(usize, Chars)> = VecDeque::new();
     let mut inverted = false;
     // Whether the live document's page labels are still to be sent.
     let mut labels_due = false;
@@ -767,21 +768,20 @@ fn char_boxes(doc: &PdfDocument, page: usize) -> Result<Vec<CharBox>, PdfiumErro
 }
 
 /// A page's character boxes, from the cache of recently selected pages.
-fn cached_chars(
-    doc: &PdfDocument,
-    cache: &mut VecDeque<(usize, Vec<CharBox>)>,
-    page: usize,
-) -> Vec<CharBox> {
+/// A page's character boxes, shared so handing them out copies nothing.
+type Chars = Rc<[CharBox]>;
+
+fn cached_chars(doc: &PdfDocument, cache: &mut VecDeque<(usize, Chars)>, page: usize) -> Chars {
     if !cache.iter().any(|(p, _)| *p == page) {
         let boxes = char_boxes(doc, page).unwrap_or_default();
-        cache.push_front((page, boxes));
+        cache.push_front((page, boxes.into()));
         cache.truncate(CHAR_CACHE_PAGES);
     }
     cache
         .iter()
         .find(|(p, _)| *p == page)
-        .map(|(_, boxes)| boxes.clone())
-        .unwrap_or_default()
+        .map(|(_, boxes)| Rc::clone(boxes))
+        .unwrap_or_else(|| Rc::new([]))
 }
 
 /// The first and last character of the line holding `chars[index]`: the
@@ -817,7 +817,7 @@ fn line_range(chars: &[CharBox], index: usize) -> (usize, usize) {
 /// Fills in the line each part starts on.
 fn number_lines(
     mut parts: Vec<SelectionPart>,
-    mut chars: impl FnMut(usize) -> Vec<CharBox>,
+    mut chars: impl FnMut(usize) -> Chars,
 ) -> Vec<SelectionPart> {
     for part in &mut parts {
         if let Some(first) = part.rects.first() {
@@ -860,7 +860,7 @@ fn line_at(chars: &[CharBox], y: f32) -> u32 {
 fn select_pages(
     from: (usize, (f32, f32)),
     to: (usize, (f32, f32)),
-    mut chars: impl FnMut(usize) -> Vec<CharBox>,
+    mut chars: impl FnMut(usize) -> Chars,
 ) -> Vec<SelectionPart> {
     if from.0 == to.0 {
         let boxes = chars(from.0);
@@ -1132,13 +1132,13 @@ mod tests {
             boxes("middle", 0.1),
             boxes("last page", 0.1),
         ];
-        let chars = |page: usize| pages[page].clone();
+        let chars = |page: usize| Chars::from(pages[page].clone());
         // From "page" on page 0 to "last" on page 2, dragged backwards.
         let parts = select_pages((2, (0.165, 0.11)), (0, (0.225, 0.11)), chars);
         let text: Vec<&str> = parts.iter().map(|p| p.text.as_str()).collect();
         assert_eq!(text, ["page", "middle", "last"]);
         assert_eq!(parts.iter().map(|p| p.page).collect::<Vec<_>>(), [0, 1, 2]);
-        assert!(select_pages((0, (0.0, 0.0)), (1, (0.0, 0.0)), |_| Vec::new()).is_empty());
+        assert!(select_pages((0, (0.0, 0.0)), (1, (0.0, 0.0)), |_| Chars::from([])).is_empty());
     }
 
     #[test]
