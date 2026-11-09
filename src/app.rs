@@ -92,6 +92,7 @@ impl App {
         };
         app.reload_config(window);
         window.set_sidebar_visible(app.config.sidebar);
+
         // Attach to the last session, like `tmux attach`.
         app.load_session(window, app.config.restore_session);
         app
@@ -109,6 +110,7 @@ impl App {
     }
 
     fn apply_config(&mut self, window: &AppWindow) {
+        window.set_sidebar_button(self.config.sidebar_button);
         let (keymap, key_problems) = Keymap::new(self.config.vim, &self.config.keys);
         self.keymap = keymap;
         let mut problems = self.problems.clone();

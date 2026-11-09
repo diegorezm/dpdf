@@ -114,6 +114,7 @@ density = "comfortable"          # compact, comfortable, spacious
 corners = "rounded"              # sharp, rounded, round
 thumbnail_size = "medium"        # small, medium, large
 vim = true
+sidebar_button = false           # hide the header button that reopens the sidebar
 notes_folder = 'C:\Users\me\Vault\PDF notes'  # Ctrl+Shift+E writes here, no dialog
 
 [keys]

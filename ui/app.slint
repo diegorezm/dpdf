@@ -18,6 +18,8 @@ export component AppWindow inherits Window {
 
     // Chrome.
     in-out property <bool> sidebar-visible: true;
+    // Show a header button to reopen the sidebar while it's closed.
+    in property <bool> sidebar-button: true;
     in property <bool> fullscreen;
     in property <bool> focus-mode;
     in property <[TabItem]> tabs;
@@ -158,6 +160,27 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         horizontal-stretch: 1;
                         spacing: 4px;
+
+                        // Reopens the closed sidebar.
+                        if root.sidebar-button && !root.sidebar-visible && root.chrome && root.page-count > 0: Rectangle {
+                            y: (parent.height - self.height) / 2;
+                            width: 30px;
+                            height: 28px;
+                            border-radius: Theme.radius;
+                            background: sidebar-touch.has-hover ? Theme.hover : transparent;
+
+                            Icon {
+                                name: "sidebar";
+                                color: sidebar-touch.has-hover ? Theme.text : Theme.text-muted;
+                            }
+
+                            sidebar-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.header-action("sidebar");
+                                }
+                            }
+                        }
 
                         // Current session, like tmux's status line.
                         Rectangle {
