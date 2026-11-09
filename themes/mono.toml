@@ -1,0 +1,14 @@
+name = "Mono"
+dark = true
+
+background = "#0c0c0c"
+surface = "#121212"
+raised = "#1a1a1a"
+border = "#2a2a2a"
+text = "#e6e6e6"
+text_muted = "#7a7a7a"
+accent = "#ffffff"
+hover = "#ffffff0f"
+selection = "#ffffff30"
+match = "#ffffff30"
+match_current = "#ffffff70"

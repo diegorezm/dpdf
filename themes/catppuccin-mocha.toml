@@ -1,0 +1,14 @@
+name = "Catppuccin"
+dark = true
+
+background = "#1e1e2e"
+surface = "#181825"
+raised = "#313244"
+border = "#45475a"
+text = "#cdd6f4"
+text_muted = "#7f849c"
+accent = "#89b4fa"
+hover = "#ffffff0f"
+selection = "#89b4fa50"
+match = "#f9e2af55"
+match_current = "#fab387aa"

@@ -143,6 +143,7 @@ fn main() -> Result<(), slint::PlatformError> {
             with_app(|app| app.setting(&win, &key, &value));
         }
     });
+    settings.on_searched(|query| with_app(|app| app.settings_searched(&query)));
     settings.on_close_requested(|| with_app(|app| app.close_settings()));
 
     // Closing the main window quits, even with settings still open.

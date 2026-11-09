@@ -1,26 +1,50 @@
 import { Theme } from "theme.slint";
-import { KeyRow } from "structs.slint";
-import { Panel, Toggle, Select, Button, TextButton, Kbd } from "widgets.slint";
+import { KeyRow, ThemeCard } from "structs.slint";
+import { Toggle, Select, Button, TextButton, Field } from "widgets.slint";
+
+// Line icons drawn as SVG paths on a 24x24 grid, so they don't depend on
+// which symbol fonts are installed.
+export component Icon inherits Path {
+    in property <string> name;
+    in property <color> color: Theme.text-muted;
+
+    width: 16px;
+    height: 16px;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: transparent;
+    stroke: root.color;
+    stroke-width: 1.8px;
+    stroke-line-cap: round;
+    commands: root.name == "general" ? "M4 6h16 M4 12h16 M4 18h16 M9 4v4 M15 10v4 M7 16v4"
+        : root.name == "reading" ? "M4 5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2z M4 19V5 M8 7h8"
+        : root.name == "theme" ? "M12 3a9 9 0 1 0 0.01 0z M12 3v18 M12 7h4 M12 11h6 M12 15h5"
+        : root.name == "appearance" ? "M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z M12 9a3 3 0 1 0 0.01 0z"
+        : root.name == "keys" ? "M3 6h18v12H3z M6.5 10h1 M10.5 10h1 M14.5 10h1 M7 14h10"
+        : root.name == "file" ? "M6 2h9l5 5v15H6z M14 2v6h6 M9 13h6 M9 17h6"
+        : root.name == "about" ? "M12 3a9 9 0 1 0 0.01 0z M12 11v6 M12 7.5v0.5"
+        : root.name == "search" ? "M11 4a7 7 0 1 0 0.01 0z M20 20l-4-4"
+        : "";
+}
 
 component NavItem inherits Rectangle {
     in property <string> text;
+    in property <string> icon;
     in property <bool> active;
     callback clicked();
 
-    height: 32px;
+    height: 34px;
     border-radius: Theme.radius;
-    background: root.active ? Theme.hover : touch.has-hover ? Theme.hover : transparent;
+    background: root.active ? Theme.accent.with-alpha(0.16) : touch.has-hover ? Theme.hover : transparent;
 
     HorizontalLayout {
         padding-left: 10px;
         spacing: 10px;
 
-        Rectangle {
-            width: 3px;
-            height: 14px;
+        Icon {
             y: (parent.height - self.height) / 2;
-            border-radius: 1.5px;
-            background: root.active ? Theme.accent : transparent;
+            name: root.icon;
+            color: root.active ? Theme.accent : Theme.text-muted;
         }
         Text {
             text: root.text;
@@ -38,6 +62,14 @@ component NavItem inherits Rectangle {
     }
 }
 
+component NavGroup inherits Text {
+    color: Theme.text-muted;
+    font-size: Theme.font-size-small;
+    height: 28px;
+    vertical-alignment: bottom;
+    x: 10px;
+}
+
 component SectionTitle inherits Text {
     color: Theme.text;
     font-size: Theme.font-size-large;
@@ -46,7 +78,7 @@ component SectionTitle inherits Text {
 
 // A bordered group of rows.
 component Card inherits Rectangle {
-    border-radius: Theme.radius + 2px;
+    border-radius: Theme.radius + 4px;
     border-width: 1px;
     border-color: Theme.border;
     background: Theme.surface;
@@ -103,9 +135,67 @@ component Row inherits Rectangle {
     }
 }
 
-export component SettingsView inherits Panel {
+// Themes as cards painted in their own colors.
+component ThemeGrid inherits Rectangle {
+    in property <[ThemeCard]> themes;
+    in property <string> current;
+    callback picked(string);
+
+    property <int> columns: root.width > 560px ? 3 : 2;
+    property <length> gap: 10px;
+    property <length> card-width: (root.width - 28px - (root.columns - 1) * root.gap) / root.columns;
+    property <length> card-height: 50px;
+
+    height: ceil(root.themes.length / root.columns) * (root.card-height + root.gap) - root.gap + 28px;
+    border-radius: Theme.radius + 4px;
+    border-width: 1px;
+    border-color: Theme.border;
+    background: Theme.surface;
+
+    for theme[i] in root.themes: Rectangle {
+        x: 14px + mod(i, root.columns) * (root.card-width + root.gap);
+        y: 14px + floor(i / root.columns) * (root.card-height + root.gap);
+        width: root.card-width;
+        height: root.card-height;
+        border-radius: Theme.radius + 2px;
+        background: theme.background;
+        border-width: theme.name == root.current ? 2px : 1px;
+        border-color: theme.name == root.current ? Theme.accent : touch.has-hover ? Theme.text-muted : theme.border;
+
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            spacing: 5px;
+
+            Text {
+                text: theme.custom ? theme.name + "  ·  custom" : theme.name;
+                color: theme.text;
+                font-size: Theme.font-size;
+                vertical-alignment: center;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+            for dot in [theme.dot1, theme.dot2, theme.dot3]: Rectangle {
+                y: (parent.height - self.height) / 2;
+                width: 10px;
+                height: 10px;
+                border-radius: 5px;
+                background: dot;
+            }
+        }
+
+        touch := TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                root.picked(theme.name);
+            }
+        }
+    }
+}
+
+export component SettingsView inherits Rectangle {
     in-out property <string> section: "general";
-    in property <[string]> theme-names;
+    in property <[ThemeCard]> theme-cards;
     in property <string> theme;
     in property <string> page-colors;
     in property <string> default-zoom;
@@ -116,63 +206,146 @@ export component SettingsView inherits Panel {
     in property <string> data-dir;
     in property <string> problems;
     in property <string> version;
+    // Which sections match the search box.
+    in property <bool> show-general: true;
+    in property <bool> show-reading: true;
+    in property <bool> show-theme: true;
+    in property <bool> show-appearance: true;
+    in property <bool> show-keys: true;
+    in property <bool> show-files: true;
+    in-out property <string> query <=> search.text;
     // key/value pairs, or commands with an empty value.
     callback set(string, string);
+    callback searched(string);
     callback close();
+
+    background: Theme.background;
 
     HorizontalLayout {
         // Navigation.
         Rectangle {
-            width: 200px;
+            width: 230px;
             background: Theme.surface;
-            border-radius: Theme.radius + 2px;
 
             VerticalLayout {
-                padding: 8px;
+                padding: 12px;
                 spacing: 2px;
-                alignment: start;
 
-                Text {
-                    text: "Settings";
-                    color: Theme.text-muted;
-                    font-size: Theme.font-size-small;
-                    height: 28px;
-                    vertical-alignment: center;
-                    x: 10px;
+                // Search.
+                Rectangle {
+                    height: 36px;
+                    border-radius: Theme.radius + 2px;
+                    border-width: 1px;
+                    border-color: search.has-focus ? Theme.accent : Theme.border;
+                    background: Theme.background;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 8px;
+                        spacing: 8px;
+
+                        Icon {
+                            y: (parent.height - self.height) / 2;
+                            name: "search";
+                        }
+                        search := Field {
+                            horizontal-stretch: 1;
+                            edited => {
+                                root.searched(self.text);
+                            }
+                        }
+                    }
+
+                    if search.text == "": Text {
+                        x: 36px;
+                        text: "Search settings";
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size;
+                    }
                 }
-                NavItem {
+                Rectangle {
+                    height: 8px;
+                }
+
+                if root.show-general: NavItem {
                     text: "General";
+                    icon: "general";
                     active: root.section == "general";
                     clicked => {
                         root.section = "general";
                     }
                 }
-                NavItem {
-                    text: "Appearance";
-                    active: root.section == "appearance";
-                    clicked => {
-                        root.section = "appearance";
-                    }
-                }
-                NavItem {
+                if root.show-reading: NavItem {
                     text: "Reading";
+                    icon: "reading";
                     active: root.section == "reading";
                     clicked => {
                         root.section = "reading";
                     }
                 }
-                NavItem {
+
+                if root.show-theme || root.show-appearance: NavGroup {
+                    text: "Visual";
+                }
+                if root.show-theme: NavItem {
+                    text: "Theme";
+                    icon: "theme";
+                    active: root.section == "theme";
+                    clicked => {
+                        root.section = "theme";
+                    }
+                }
+                if root.show-appearance: NavItem {
+                    text: "Appearance";
+                    icon: "appearance";
+                    active: root.section == "appearance";
+                    clicked => {
+                        root.section = "appearance";
+                    }
+                }
+
+                if root.show-keys || root.show-files: NavGroup {
+                    text: "App";
+                }
+                if root.show-keys: NavItem {
                     text: "Keybindings";
+                    icon: "keys";
                     active: root.section == "keys";
                     clicked => {
                         root.section = "keys";
                     }
                 }
-                NavItem {
-                    text: "About";
-                    active: root.section == "about";
+                if root.show-files: NavItem {
+                    text: "Configuration files";
+                    icon: "file";
+                    active: root.section == "files";
                     clicked => {
-                        root.section = "about";
+                        root.section = "files";
+                    }
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                }
+
+                // Version, which also opens About.
+                Rectangle {
+                    height: 28px;
+                    border-radius: Theme.radius;
+                    background: about.has-hover ? Theme.hover : transparent;
+
+                    Text {
+                        x: 10px;
+                        text: "dpdf v\{root.version}";
+                        color: root.section == "about" ? Theme.accent : Theme.text-muted;
+                        font-size: Theme.font-size-small;
+                    }
+
+                    about := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.section = "about";
+                        }
                     }
                 }
             }
@@ -187,11 +360,11 @@ export component SettingsView inherits Panel {
         VerticalLayout {
             // Breadcrumb bar.
             Rectangle {
-                height: 48px;
+                height: 52px;
 
                 HorizontalLayout {
-                    padding-left: 24px;
-                    padding-right: 10px;
+                    padding-left: 28px;
+                    padding-right: 12px;
                     spacing: 8px;
 
                     Text {
@@ -201,7 +374,7 @@ export component SettingsView inherits Panel {
                         vertical-alignment: center;
                     }
                     Text {
-                        text: root.section == "general" ? "General" : root.section == "appearance" ? "Appearance" : root.section == "reading" ? "Reading" : root.section == "keys" ? "Keybindings" : "About";
+                        text: root.section == "general" ? "General" : root.section == "reading" ? "Reading" : root.section == "theme" ? "Theme" : root.section == "appearance" ? "Appearance" : root.section == "keys" ? "Keybindings" : root.section == "files" ? "Configuration files" : "About";
                         color: Theme.text;
                         font-size: Theme.font-size;
                         vertical-alignment: center;
@@ -236,7 +409,7 @@ export component SettingsView inherits Panel {
 
                 body := VerticalLayout {
                     padding: 28px;
-                    padding-top: 20px;
+                    padding-top: 22px;
                     spacing: Theme.spacing;
                     alignment: start;
 
@@ -281,103 +454,6 @@ export component SettingsView inherits Panel {
                                     text: "Restore";
                                     clicked => {
                                         root.set("restore-session-now", "");
-                                    }
-                                }
-                            }
-                        }
-
-                        SectionTitle {
-                            text: "Files";
-                        }
-                        Card {
-                            Row {
-                                title: "Configuration file";
-                                description: "Every setting here, plus keybindings, lives in config.toml.";
-                                HorizontalLayout {
-                                    spacing: 6px;
-
-                                    Button {
-                                        text: "Open";
-                                        clicked => {
-                                            root.set("open-config", "");
-                                        }
-                                    }
-                                    Button {
-                                        text: "Reload";
-                                        clicked => {
-                                            root.set("reload", "");
-                                        }
-                                    }
-                                }
-                            }
-                            Row {
-                                title: "Data folder";
-                                description: root.data-dir;
-                                last: true;
-                                Button {
-                                    text: "Open";
-                                    clicked => {
-                                        root.set("open-data-dir", "");
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if root.section == "appearance": VerticalLayout {
-                        spacing: Theme.spacing;
-
-                        SectionTitle {
-                            text: "Theme";
-                        }
-                        Card {
-                            Row {
-                                title: "Theme";
-                                description: "Colors for the whole interface.";
-                                Select {
-                                    options: root.theme-names;
-                                    value: root.theme;
-                                    selected(name) => {
-                                        root.set("theme", name);
-                                    }
-                                }
-                            }
-                            Row {
-                                title: "Custom themes";
-                                description: "Drop .toml files in the themes folder. Copy a built-in theme from the repository's themes/ folder to start.";
-                                last: true;
-                                HorizontalLayout {
-                                    spacing: 6px;
-
-                                    Button {
-                                        text: "Open folder";
-                                        clicked => {
-                                            root.set("open-themes", "");
-                                        }
-                                    }
-                                    Button {
-                                        text: "Reload";
-                                        clicked => {
-                                            root.set("reload", "");
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        SectionTitle {
-                            text: "Pages";
-                        }
-                        Card {
-                            Row {
-                                title: "Page colors";
-                                description: "Inverted turns white pages dark, for reading at night.";
-                                last: true;
-                                Select {
-                                    options: ["Original", "Inverted"];
-                                    value: root.page-colors;
-                                    selected(value) => {
-                                        root.set("page-colors", value);
                                     }
                                 }
                             }
@@ -427,6 +503,70 @@ export component SettingsView inherits Panel {
                                     checked: root.vim;
                                     toggled => {
                                         root.set("vim", root.vim ? "false" : "true");
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.section == "theme": VerticalLayout {
+                        spacing: Theme.spacing;
+
+                        SectionTitle {
+                            text: "Theme";
+                        }
+                        ThemeGrid {
+                            themes: root.theme-cards;
+                            current: root.theme;
+                            picked(name) => {
+                                root.set("theme", name);
+                            }
+                        }
+
+                        SectionTitle {
+                            text: "Your themes";
+                        }
+                        Card {
+                            Row {
+                                title: "Reload themes";
+                                description: "Reads .toml files from the themes folder. Copy any file from the repository's themes/ folder to start; missing colors fall back to a built-in theme.";
+                                last: true;
+                                HorizontalLayout {
+                                    spacing: 6px;
+
+                                    Button {
+                                        text: "Open folder";
+                                        clicked => {
+                                            root.set("open-themes", "");
+                                        }
+                                    }
+                                    Button {
+                                        text: "Reload";
+                                        clicked => {
+                                            root.set("reload", "");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.section == "appearance": VerticalLayout {
+                        spacing: Theme.spacing;
+
+                        SectionTitle {
+                            text: "Pages";
+                        }
+                        Card {
+                            Row {
+                                title: "Page colors";
+                                description: "Inverted turns white pages dark, for reading at night.";
+                                last: true;
+                                Select {
+                                    options: ["Original", "Inverted"];
+                                    value: root.page-colors;
+                                    selected(value) => {
+                                        root.set("page-colors", value);
                                     }
                                 }
                             }
@@ -494,6 +634,47 @@ export component SettingsView inherits Panel {
                                     y: parent.height - 1px;
                                     height: 1px;
                                     background: Theme.border;
+                                }
+                            }
+                        }
+                    }
+
+                    if root.section == "files": VerticalLayout {
+                        spacing: Theme.spacing;
+
+                        SectionTitle {
+                            text: "Configuration files";
+                        }
+                        Card {
+                            Row {
+                                title: "config.toml";
+                                description: "Every setting here, plus keybindings. Changes made in this window are written there too.";
+                                HorizontalLayout {
+                                    spacing: 6px;
+
+                                    Button {
+                                        text: "Open";
+                                        clicked => {
+                                            root.set("open-config", "");
+                                        }
+                                    }
+                                    Button {
+                                        text: "Reload";
+                                        clicked => {
+                                            root.set("reload", "");
+                                        }
+                                    }
+                                }
+                            }
+                            Row {
+                                title: "Data folder";
+                                description: root.data-dir + "\nconfig.toml, themes, annotations, and reading history.";
+                                last: true;
+                                Button {
+                                    text: "Open";
+                                    clicked => {
+                                        root.set("open-data-dir", "");
+                                    }
                                 }
                             }
                         }

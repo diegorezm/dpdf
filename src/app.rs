@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
 
-use slint::{ComponentHandle, Model, SharedString, VecModel};
+use slint::{ComponentHandle, Model, VecModel};
 
 use crate::config::{
     self, built_in_themes, load_themes, Config, DefaultZoom, PageColors, ThemeDef,
@@ -15,7 +15,7 @@ use crate::palette::{self, Entry, Target};
 use crate::pdf::{Event, Worker};
 use crate::store::Store;
 use crate::viewer::{file_name, to_color, ui_int, PopupOutcome, Viewer};
-use crate::{AppWindow, KeyRow, PaletteItem, SettingsWindow, TabItem, Theme};
+use crate::{AppWindow, KeyRow, PaletteItem, SettingsWindow, TabItem, Theme, ThemeCard};
 
 const PALETTE_LIMIT: usize = 12;
 
@@ -107,9 +107,23 @@ impl App {
             problems.push(format!("Theme \"{}\" not found", self.config.theme));
         }
 
-        let names: Vec<SharedString> = self.themes.iter().map(|t| t.name.as_str().into()).collect();
+        let built_in: Vec<String> = built_in_themes().into_iter().map(|t| t.name).collect();
+        let cards: Vec<ThemeCard> = self
+            .themes
+            .iter()
+            .map(|t| ThemeCard {
+                name: t.name.as_str().into(),
+                background: to_color(&t.background),
+                text: to_color(&t.text),
+                border: to_color(&t.border),
+                dot1: opaque(to_color(&t.accent)),
+                dot2: opaque(to_color(&t.selection)),
+                dot3: opaque(to_color(&t.match_current)),
+                custom: !built_in.contains(&t.name),
+            })
+            .collect();
         self.settings
-            .set_theme_names(Rc::new(VecModel::from(names)).into());
+            .set_theme_cards(Rc::new(VecModel::from(cards)).into());
         self.settings
             .set_theme_name(theme.map(|t| t.name).unwrap_or_default().into());
         self.settings.set_page_colors(
@@ -132,8 +146,22 @@ impl App {
         self.settings.set_vim(self.config.vim);
         self.settings.set_problems(problems.join("\n").into());
 
+        self.update_key_rows();
+
+        self.viewer.set_default_zoom(self.config.default_zoom);
+        self.viewer
+            .set_inverted(window, self.config.page_colors == PageColors::Inverted);
+    }
+
+    fn update_key_rows(&self) {
+        let query = self.settings.get_query();
         let rows: Vec<KeyRow> = Action::ALL
             .iter()
+            .filter(|a| {
+                query.trim().is_empty()
+                    || palette::score(&query, a.title()).is_some()
+                    || palette::score(&query, a.name()).is_some()
+            })
             .map(|a| KeyRow {
                 title: a.title().into(),
                 name: a.name().into(),
@@ -142,10 +170,35 @@ impl App {
             .collect();
         self.settings
             .set_key_rows(Rc::new(VecModel::from(rows)).into());
+    }
 
-        self.viewer.set_default_zoom(self.config.default_zoom);
-        self.viewer
-            .set_inverted(window, self.config.page_colors == PageColors::Inverted);
+    /// Filters the settings sections by the search box and jumps to the
+    /// first match.
+    pub fn settings_searched(&mut self, query: &str) {
+        let [general, reading, theme, appearance, keys, files] = matching_sections(query);
+        let s = &self.settings;
+        s.set_show_general(general);
+        s.set_show_reading(reading);
+        s.set_show_theme(theme);
+        s.set_show_appearance(appearance);
+        s.set_show_keys(keys);
+        s.set_show_files(files);
+        let first = [
+            (general, "general"),
+            (reading, "reading"),
+            (theme, "theme"),
+            (appearance, "appearance"),
+            (keys, "keys"),
+            (files, "files"),
+        ]
+        .into_iter()
+        .find(|(shown, _)| *shown);
+        if let Some((_, section)) = first {
+            if !query.trim().is_empty() {
+                s.set_section(section.into());
+            }
+        }
+        self.update_key_rows();
     }
 
     fn save_config(&self, window: &AppWindow) {
@@ -678,6 +731,34 @@ impl App {
     }
 }
 
+/// Words each settings section answers to, for the settings search box:
+/// general, reading, theme, appearance, keybindings, files.
+const SECTION_WORDS: [&str; 6] = [
+    "general session restore startup tabs",
+    "reading zoom fit width page default sidebar thumbnails vim keyboard",
+    "theme themes colors dark light custom",
+    "appearance page colors inverted night dark",
+    "keybindings keys shortcuts bindings vim",
+    "configuration config files toml data folder reload",
+];
+
+fn matching_sections(query: &str) -> [bool; 6] {
+    let query = query.trim();
+    // Every action is listed under Keybindings, so match those too.
+    let action_match = Action::ALL
+        .iter()
+        .any(|a| palette::score(query, a.title()).is_some());
+    let mut shown = SECTION_WORDS.map(|words| {
+        query.is_empty() || words.split(' ').any(|w| palette::score(query, w).is_some())
+    });
+    shown[4] |= action_match;
+    shown
+}
+
+fn opaque(color: slint::Color) -> slint::Color {
+    slint::Color::from_argb_u8(255, color.red(), color.green(), color.blue())
+}
+
 fn apply_theme(t: &Theme<'_>, theme: &ThemeDef) {
     t.set_background(to_color(&theme.background));
     t.set_surface(to_color(&theme.surface));
@@ -723,4 +804,23 @@ fn clear_status_later(window: &AppWindow) {
             window.set_status("".into());
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_search() {
+        assert_eq!(matching_sections(""), [true; 6]);
+        assert_eq!(
+            matching_sections("vim"),
+            [false, true, false, false, true, false]
+        );
+        let theme = matching_sections("dark");
+        assert!(theme[2] && theme[3] && !theme[0]);
+        // Action titles land in Keybindings.
+        assert!(matching_sections("export notes")[4]);
+        assert_eq!(matching_sections("zzzqqq"), [false; 6]);
+    }
 }

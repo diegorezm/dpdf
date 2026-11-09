@@ -154,12 +154,17 @@ fn default_true() -> bool {
     true
 }
 
-const BUILT_IN: [&str; 5] = [
+const BUILT_IN: [&str; 10] = [
     include_str!("../themes/graphite.toml"),
+    include_str!("../themes/catppuccin-mocha.toml"),
+    include_str!("../themes/gruvbox.toml"),
+    include_str!("../themes/mono.toml"),
+    include_str!("../themes/nord.toml"),
+    include_str!("../themes/rose-pine.toml"),
+    include_str!("../themes/tokyo-night.toml"),
+    include_str!("../themes/catppuccin-latte.toml"),
     include_str!("../themes/paper.toml"),
     include_str!("../themes/sepia.toml"),
-    include_str!("../themes/nord.toml"),
-    include_str!("../themes/gruvbox.toml"),
 ];
 
 pub fn built_in_themes() -> Vec<ThemeDef> {

@@ -1,0 +1,14 @@
+name = "Latte"
+dark = false
+
+background = "#eff1f5"
+surface = "#e6e9ef"
+raised = "#ffffff"
+border = "#ccd0da"
+text = "#4c4f69"
+text_muted = "#8c8fa1"
+accent = "#d20f39"
+hover = "#4c4f6910"
+selection = "#1e66f540"
+match = "#df8e1d55"
+match_current = "#fe640baa"

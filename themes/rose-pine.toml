@@ -1,0 +1,14 @@
+name = "Rosé Pine"
+dark = true
+
+background = "#191724"
+surface = "#1f1d2e"
+raised = "#26233a"
+border = "#403d52"
+text = "#e0def4"
+text_muted = "#6e6a86"
+accent = "#c4a7e7"
+hover = "#ffffff0d"
+selection = "#9ccfd850"
+match = "#f6c17755"
+match_current = "#eb6f92aa"

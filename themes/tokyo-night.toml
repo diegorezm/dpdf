@@ -1,0 +1,14 @@
+name = "Tokyo Night"
+dark = true
+
+background = "#1a1b26"
+surface = "#16161e"
+raised = "#24283b"
+border = "#2f3549"
+text = "#c0caf5"
+text_muted = "#565f89"
+accent = "#7aa2f7"
+hover = "#ffffff0d"
+selection = "#9ece6a45"
+match = "#e0af6855"
+match_current = "#f7768eaa"

@@ -1,15 +1,16 @@
 import { Theme } from "theme.slint";
-import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow } from "structs.slint";
+import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard } from "structs.slint";
 import { Panel, Field, TextButton } from "widgets.slint";
 import { Sidebar, ReadingArea, StartScreen, TabBar } from "reader.slint";
 import { Palette } from "palette.slint";
 import { SettingsView } from "settings.slint";
 
 export { Theme }
-export { Highlight, Mark, PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow } from "structs.slint";
+export { Highlight, Mark, PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard } from "structs.slint";
 
 export component AppWindow inherits Window {
     title: root.page-count > 0 ? "\{root.document-title} — dpdf" : "dpdf";
+    icon: @image-url("../assets/icon.svg");
     preferred-width: 1100px;
     preferred-height: 760px;
     background: Theme.background;
@@ -524,6 +525,7 @@ export component AppWindow inherits Window {
 // Settings live in their own window, so they can sit beside the document.
 export component SettingsWindow inherits Window {
     title: "dpdf settings";
+    icon: @image-url("../assets/icon.svg");
     preferred-width: 900px;
     preferred-height: 640px;
     min-width: 640px;
@@ -531,7 +533,7 @@ export component SettingsWindow inherits Window {
     background: Theme.background;
 
     in-out property <string> section: "general";
-    in property <[string]> theme-names;
+    in property <[ThemeCard]> theme-cards;
     in property <string> theme-name;
     in property <string> page-colors;
     in property <string> default-zoom;
@@ -542,7 +544,15 @@ export component SettingsWindow inherits Window {
     in property <string> data-dir;
     in property <string> problems;
     in property <string> version;
+    in-out property <string> query;
+    in property <bool> show-general: true;
+    in property <bool> show-reading: true;
+    in property <bool> show-theme: true;
+    in property <bool> show-appearance: true;
+    in property <bool> show-keys: true;
+    in property <bool> show-files: true;
     callback set(string, string);
+    callback searched(string);
     callback close-requested();
 
     FocusScope {
@@ -555,11 +565,15 @@ export component SettingsWindow inherits Window {
         }
 
         SettingsView {
-            border-radius: 0;
-            border-width: 0;
-            drop-shadow-blur: 0;
             section <=> root.section;
-            theme-names: root.theme-names;
+            query <=> root.query;
+            theme-cards: root.theme-cards;
+            show-general: root.show-general;
+            show-reading: root.show-reading;
+            show-theme: root.show-theme;
+            show-appearance: root.show-appearance;
+            show-keys: root.show-keys;
+            show-files: root.show-files;
             theme: root.theme-name;
             page-colors: root.page-colors;
             default-zoom: root.default-zoom;
@@ -572,6 +586,9 @@ export component SettingsWindow inherits Window {
             version: root.version;
             set(key, value) => {
                 root.set(key, value);
+            }
+            searched(text) => {
+                root.searched(text);
             }
             close => {
                 root.close-requested();
