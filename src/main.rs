@@ -67,7 +67,8 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     });
-    let app = App::new(&window, worker);
+    let settings = SettingsWindow::new()?;
+    let app = App::new(&window, settings.clone_strong(), worker);
     APP.with(|cell| *cell.borrow_mut() = Some(app));
 
     // `dpdf file.pdf`, which is also how "Open with" passes files on Windows.
@@ -134,8 +135,21 @@ fn main() -> Result<(), slint::PlatformError> {
         .palette_accept(&win, None));
     on!(window.on_palette_clicked, |app, win, i| app
         .palette_accept(&win, Some(index(i))));
-    on!(window.on_settings_set, |app, win, key, value| app
-        .setting(&win, &key, &value));
+
+    // The settings window reports back to the main window's app state.
+    let weak = window.as_weak();
+    settings.on_set(move |key, value| {
+        if let Some(win) = weak.upgrade() {
+            with_app(|app| app.setting(&win, &key, &value));
+        }
+    });
+    settings.on_close_requested(|| with_app(|app| app.close_settings()));
+
+    // Closing the main window quits, even with settings still open.
+    window.window().on_close_requested(|| {
+        let _ = slint::quit_event_loop();
+        slint::CloseRequestResponse::HideWindow
+    });
 
     window.run()?;
     with_app(|app| app.quit());

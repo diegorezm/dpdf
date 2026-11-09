@@ -45,7 +45,7 @@ export component AppWindow inherits Window {
     in property <[RecentItem]> recent;
     in property <int> session-tabs;
 
-    // Overlays: "", "search", "goto", "palette", "settings", or "note".
+    // Overlays: "", "search", "goto", "palette", or "note".
     in property <string> overlay;
     in-out property <string> search-text <=> search-input.text;
     in property <string> search-status;
@@ -62,20 +62,6 @@ export component AppWindow inherits Window {
     in property <length> popup-y;
     in property <[color]> annotation-colors;
     in property <bool> annotation-has-note;
-
-    // Settings.
-    in-out property <string> settings-section: "general";
-    in property <[string]> theme-names;
-    in property <string> theme-name;
-    in property <string> page-colors;
-    in property <string> default-zoom;
-    in property <bool> restore-session;
-    in property <bool> sidebar-default;
-    in property <bool> vim;
-    in property <[KeyRow]> key-rows;
-    in property <string> data-dir;
-    in property <string> problems;
-    in property <string> version;
 
     // Raw key text and modifiers; Rust decides what it means.
     callback key-pressed(string, bool, bool, bool) -> bool;
@@ -103,7 +89,6 @@ export component AppWindow inherits Window {
     callback palette-moved(int);
     callback palette-accepted();
     callback palette-clicked(int);
-    callback settings-set(string, string);
 
     changed viewport-y => { root.scrolled(); }
     changed viewport-x => { root.scrolled(); }
@@ -512,38 +497,6 @@ export component AppWindow inherits Window {
             }
         }
 
-        // Settings: a large sheet over a dimmed window.
-        if root.overlay == "settings": Rectangle {
-            background: #00000066;
-
-            TouchArea { }
-
-            SettingsView {
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-                width: min(parent.width - 48px, 980px);
-                height: min(parent.height - 48px, 720px);
-                section <=> root.settings-section;
-                theme-names: root.theme-names;
-                theme: root.theme-name;
-                page-colors: root.page-colors;
-                default-zoom: root.default-zoom;
-                restore-session: root.restore-session;
-                sidebar: root.sidebar-default;
-                vim: root.vim;
-                keys: root.key-rows;
-                data-dir: root.data-dir;
-                problems: root.problems;
-                version: root.version;
-                set(key, value) => {
-                    root.settings-set(key, value);
-                }
-                close => {
-                    root.settings-clicked();
-                }
-            }
-        }
-
         // Command palette, near the top like Zed and VS Code.
         palette := Palette {
             visible: root.overlay == "palette";
@@ -563,6 +516,65 @@ export component AppWindow inherits Window {
             }
             item-clicked(i) => {
                 root.palette-clicked(i);
+            }
+        }
+    }
+}
+
+// Settings live in their own window, so they can sit beside the document.
+export component SettingsWindow inherits Window {
+    title: "dpdf settings";
+    preferred-width: 900px;
+    preferred-height: 640px;
+    min-width: 640px;
+    min-height: 420px;
+    background: Theme.background;
+
+    in-out property <string> section: "general";
+    in property <[string]> theme-names;
+    in property <string> theme-name;
+    in property <string> page-colors;
+    in property <string> default-zoom;
+    in property <bool> restore-session;
+    in property <bool> sidebar-default;
+    in property <bool> vim;
+    in property <[KeyRow]> key-rows;
+    in property <string> data-dir;
+    in property <string> problems;
+    in property <string> version;
+    callback set(string, string);
+    callback close-requested();
+
+    FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.close-requested();
+                return accept;
+            }
+            reject
+        }
+
+        SettingsView {
+            border-radius: 0;
+            border-width: 0;
+            drop-shadow-blur: 0;
+            section <=> root.section;
+            theme-names: root.theme-names;
+            theme: root.theme-name;
+            page-colors: root.page-colors;
+            default-zoom: root.default-zoom;
+            restore-session: root.restore-session;
+            sidebar: root.sidebar-default;
+            vim: root.vim;
+            keys: root.key-rows;
+            data-dir: root.data-dir;
+            problems: root.problems;
+            version: root.version;
+            set(key, value) => {
+                root.set(key, value);
+            }
+            close => {
+                root.close-requested();
             }
         }
     }

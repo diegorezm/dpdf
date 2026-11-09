@@ -15,12 +15,13 @@ use crate::palette::{self, Entry, Target};
 use crate::pdf::{Event, Worker};
 use crate::store::Store;
 use crate::viewer::{file_name, to_color, ui_int, PopupOutcome, Viewer};
-use crate::{AppWindow, KeyRow, PaletteItem, TabItem, Theme};
+use crate::{AppWindow, KeyRow, PaletteItem, SettingsWindow, TabItem, Theme};
 
 const PALETTE_LIMIT: usize = 12;
 
 pub struct App {
     viewer: Viewer,
+    settings: SettingsWindow,
     config: Config,
     themes: Vec<ThemeDef>,
     keymap: Keymap,
@@ -38,14 +39,14 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(window: &AppWindow, worker: Worker) -> Self {
+    pub fn new(window: &AppWindow, settings: SettingsWindow, worker: Worker) -> Self {
         let store = Store::load();
         let tab_items = Rc::new(VecModel::default());
         let palette_items = Rc::new(VecModel::default());
         window.set_tabs(tab_items.clone().into());
         window.set_palette_items(palette_items.clone().into());
-        window.set_version(env!("CARGO_PKG_VERSION").into());
-        window.set_data_dir(
+        settings.set_version(env!("CARGO_PKG_VERSION").into());
+        settings.set_data_dir(
             config::data_dir()
                 .map(|d| d.display().to_string())
                 .unwrap_or_default()
@@ -54,6 +55,7 @@ impl App {
 
         let mut app = Self {
             viewer: Viewer::new(window, worker, store),
+            settings,
             config: Config::default(),
             themes: built_in_themes(),
             keymap: Keymap::default(),
@@ -99,32 +101,36 @@ impl App {
             .or(self.themes.first())
             .cloned();
         if let Some(theme) = &theme {
-            apply_theme(window, theme);
+            apply_theme(&window.global::<Theme>(), theme);
+            apply_theme(&self.settings.global::<Theme>(), theme);
         } else {
             problems.push(format!("Theme \"{}\" not found", self.config.theme));
         }
 
         let names: Vec<SharedString> = self.themes.iter().map(|t| t.name.as_str().into()).collect();
-        window.set_theme_names(Rc::new(VecModel::from(names)).into());
-        window.set_theme_name(theme.map(|t| t.name).unwrap_or_default().into());
-        window.set_page_colors(
+        self.settings
+            .set_theme_names(Rc::new(VecModel::from(names)).into());
+        self.settings
+            .set_theme_name(theme.map(|t| t.name).unwrap_or_default().into());
+        self.settings.set_page_colors(
             match self.config.page_colors {
                 PageColors::Original => "Original",
                 PageColors::Inverted => "Inverted",
             }
             .into(),
         );
-        window.set_default_zoom(
+        self.settings.set_default_zoom(
             match self.config.default_zoom {
                 DefaultZoom::FitWidth => "Fit width",
                 DefaultZoom::FitPage => "Fit page",
             }
             .into(),
         );
-        window.set_restore_session(self.config.restore_session);
-        window.set_sidebar_default(self.config.sidebar);
-        window.set_vim(self.config.vim);
-        window.set_problems(problems.join("\n").into());
+        self.settings
+            .set_restore_session(self.config.restore_session);
+        self.settings.set_sidebar_default(self.config.sidebar);
+        self.settings.set_vim(self.config.vim);
+        self.settings.set_problems(problems.join("\n").into());
 
         let rows: Vec<KeyRow> = Action::ALL
             .iter()
@@ -134,7 +140,8 @@ impl App {
                 keys: self.keymap.keys_for(*a).join(",  ").into(),
             })
             .collect();
-        window.set_key_rows(Rc::new(VecModel::from(rows)).into());
+        self.settings
+            .set_key_rows(Rc::new(VecModel::from(rows)).into());
 
         self.viewer.set_default_zoom(self.config.default_zoom);
         self.viewer
@@ -229,14 +236,7 @@ impl App {
                 window.set_goto_text(ui_int(self.viewer.current_page() + 1).to_string().into());
                 self.set_overlay(window, "goto");
             }
-            Action::Settings => {
-                let next = if window.get_overlay() == "settings" {
-                    ""
-                } else {
-                    "settings"
-                };
-                self.set_overlay(window, next);
-            }
+            Action::Settings => self.toggle_settings(),
             Action::ToggleSidebar => {
                 window.set_sidebar_visible(!window.get_sidebar_visible());
                 self.viewer.sidebar_shown(window);
@@ -311,6 +311,22 @@ impl App {
         } else if window.get_focus_mode() {
             window.set_focus_mode(false);
         }
+    }
+
+    /// Shows the settings window, or hides it if it's already in front.
+    pub fn toggle_settings(&self) {
+        let window = self.settings.window();
+        let result = if window.is_visible() {
+            window.hide()
+        } else {
+            self.settings.show()
+        };
+        // Failing to open settings isn't worth crashing the reader over.
+        let _ = result;
+    }
+
+    pub fn close_settings(&self) {
+        let _ = self.settings.hide();
     }
 
     pub fn set_overlay(&self, window: &AppWindow, overlay: &str) {
@@ -662,8 +678,7 @@ impl App {
     }
 }
 
-fn apply_theme(window: &AppWindow, theme: &ThemeDef) {
-    let t = window.global::<Theme>();
+fn apply_theme(t: &Theme<'_>, theme: &ThemeDef) {
     t.set_background(to_color(&theme.background));
     t.set_surface(to_color(&theme.surface));
     t.set_raised(to_color(&theme.raised));
