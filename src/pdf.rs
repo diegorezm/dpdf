@@ -11,6 +11,8 @@ use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 
 use pdfium_render::prelude::*;
+
+use crate::recover::{self, Glyph, Recovery};
 use serde::{Deserialize, Serialize};
 
 pub enum Request {
@@ -215,6 +217,8 @@ struct OpenDoc<'a> {
     password: Option<String>,
     /// Page labels, once read.
     labels: Option<Vec<String>>,
+    /// For text the PDF draws but maps to nothing; loaded on first need.
+    recovery: Recovering,
     /// Each page's text, squashed (see `squash`), once a search has read
     /// it. Later searches skip pages that can't match without asking
     /// PDFium. A few KB per page.
@@ -374,6 +378,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                             path: path.clone(),
                             password: password.clone(),
                             labels: None,
+                            recovery: Recovering::Unloaded,
                             modified: stamp,
                             doc,
                             texts: vec![None; page_sizes.len()],
@@ -452,18 +457,20 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
             path,
             password,
             page_sizes,
+            recovery,
             ..
         }) = documents.front_mut()
         else {
             continue;
         };
         let doc = &*doc;
+        let mut recover = |page: usize| recovery.glyphs(path, password.as_deref(), page);
 
         if let Some((page, point)) = link.take() {
             let target = link_at(doc, page, point);
             on_event(Event::Link(target));
         } else if let Some((page, point)) = select_line.take() {
-            let boxes = cached_chars(doc, &mut char_cache, page);
+            let boxes = cached_chars(doc, &mut char_cache, page, &mut recover);
             let parts = nearest_char(&boxes, point)
                 .and_then(|i| {
                     let (a, b) = line_range(&boxes, i);
@@ -478,12 +485,14 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 .into_iter()
                 .collect();
             on_event(Event::Selection(number_lines(parts, |page| {
-                cached_chars(doc, &mut char_cache, page)
+                cached_chars(doc, &mut char_cache, page, &mut recover)
             })));
         } else if let Some((from, to)) = select.take() {
-            let parts = select_pages(from, to, |page| cached_chars(doc, &mut char_cache, page));
+            let parts = select_pages(from, to, |page| {
+                cached_chars(doc, &mut char_cache, page, &mut recover)
+            });
             on_event(Event::Selection(number_lines(parts, |page| {
-                cached_chars(doc, &mut char_cache, page)
+                cached_chars(doc, &mut char_cache, page, &mut recover)
             })));
         } else if let Some(page) = renders.previews.pop_front() {
             let width_px = (renders.width_px / PREVIEW_DIVISOR).max(1);
@@ -771,7 +780,9 @@ struct CharBox {
     rect: NormRect,
 }
 
-fn char_boxes(doc: &PdfDocument, page: usize) -> Result<Vec<CharBox>, PdfiumError> {
+/// A page's characters, and whether it also draws text PDFium reads as
+/// blank (see `has_unreadable_text`).
+fn char_boxes(doc: &PdfDocument, page: usize) -> Result<(Vec<CharBox>, bool), PdfiumError> {
     let pdf_page = load_page(doc, page)?;
     let size = (pdf_page.width().value, pdf_page.height().value);
     let text = pdf_page.text()?;
@@ -790,17 +801,28 @@ fn char_boxes(doc: &PdfDocument, page: usize) -> Result<Vec<CharBox>, PdfiumErro
                     height: 0.0,
                 }),
         })
-        .collect();
-    Ok(boxes)
+        .collect::<Vec<_>>();
+    let unreadable = has_unreadable_text(&pdf_page, &text, &boxes);
+    Ok((boxes, unreadable))
 }
 
-/// A page's character boxes, from the cache of recently selected pages.
 /// A page's character boxes, shared so handing them out copies nothing.
 type Chars = Rc<[CharBox]>;
 
-fn cached_chars(doc: &PdfDocument, cache: &mut VecDeque<(usize, Chars)>, page: usize) -> Chars {
+/// A page's character boxes, from the cache of recently selected pages.
+/// `recover` gives the glyphs of a page whose text PDFium can't read;
+/// it's only called for pages that draw such text.
+fn cached_chars(
+    doc: &PdfDocument,
+    cache: &mut VecDeque<(usize, Chars)>,
+    page: usize,
+    recover: &mut impl FnMut(usize) -> Vec<Glyph>,
+) -> Chars {
     if !cache.iter().any(|(p, _)| *p == page) {
-        let boxes = char_boxes(doc, page).unwrap_or_default();
+        let (mut boxes, unreadable) = char_boxes(doc, page).unwrap_or_default();
+        if unreadable {
+            boxes = merge_recovered(boxes, recover(page));
+        }
         cache.push_front((page, boxes.into()));
         cache.truncate(CHAR_CACHE_PAGES);
     }
@@ -809,6 +831,193 @@ fn cached_chars(doc: &PdfDocument, cache: &mut VecDeque<(usize, Chars)>, page: u
         .find(|(p, _)| *p == page)
         .map(|(_, boxes)| Rc::clone(boxes))
         .unwrap_or_else(|| Rc::new([]))
+}
+
+/// The document's recovery of unreadable text: not needed yet, loaded,
+/// or not possible.
+enum Recovering {
+    Unloaded,
+    Ready(Box<Recovery>),
+    Failed,
+}
+
+impl Recovering {
+    fn glyphs(&mut self, path: &Path, password: Option<&str>, page: usize) -> Vec<Glyph> {
+        if let Recovering::Unloaded = self {
+            *self = Recovery::load(path, password)
+                .map_or(Recovering::Failed, |r| Recovering::Ready(Box::new(r)));
+        }
+        match self {
+            Recovering::Ready(recovery) => recovery.glyphs(page),
+            _ => Vec::new(),
+        }
+    }
+}
+
+/// Whether a page draws text PDFium reads as blank: a text object with
+/// visible bounds, no character inside, and no text, as with fonts that
+/// map glyphs to spaces. Asking PDFium for an object's text is slow
+/// (about 20 µs), so only objects with no character inside are asked.
+fn has_unreadable_text(pdf_page: &PdfPage, page_text: &PdfPageText, boxes: &[CharBox]) -> bool {
+    let (w, h) = (pdf_page.width().value, pdf_page.height().value);
+    if !(w > 0.0 && h > 0.0) {
+        return false;
+    }
+    // Centers of readable characters, sorted by height for range lookups.
+    let mut centers: Vec<(f32, f32)> = boxes
+        .iter()
+        .filter(|b| !b.c.is_whitespace() && b.rect.width > 0.0)
+        .map(|b| {
+            (
+                b.rect.y + b.rect.height / 2.0,
+                b.rect.x + b.rect.width / 2.0,
+            )
+        })
+        .collect();
+    centers.sort_by(|a, b| a.0.total_cmp(&b.0));
+    pdf_page.objects().iter().any(|object| {
+        let Some(text) = object.as_text_object() else {
+            return false;
+        };
+        let Ok(bounds) = object.bounds() else {
+            return false;
+        };
+        if bounds.width().value <= 0.5 || bounds.height().value <= 0.5 {
+            return false;
+        }
+        let r = normalize(bounds.to_rect(), (w, h));
+        let from = centers.partition_point(|c| c.0 < r.y);
+        let has_char = centers[from..]
+            .iter()
+            .take_while(|c| c.0 <= r.y + r.height)
+            .any(|c| c.1 >= r.x && c.1 <= r.x + r.width);
+        !has_char && page_text.for_object(text).trim().is_empty()
+    })
+}
+
+fn is_break(c: char) -> bool {
+    matches!(c, '\r' | '\n')
+}
+
+/// Horizontal space, as a page fraction, wider than letter spacing.
+const WORD_GAP: f32 = 0.003;
+
+/// Adds recovered glyphs to PDFium's characters. Glyphs PDFium already
+/// has text for are dropped; the rest are grouped into runs (a formula),
+/// which replace the blanks PDFium put there and go into reading order
+/// after the text to their left on the same line.
+fn merge_recovered(mut boxes: Vec<CharBox>, glyphs: Vec<Glyph>) -> Vec<CharBox> {
+    let center = |r: &NormRect| (r.x + r.width / 2.0, r.y + r.height / 2.0);
+    let inside = |r: &NormRect, (x, y): (f32, f32)| {
+        x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
+    };
+    let missing: Vec<Glyph> = glyphs
+        .into_iter()
+        .filter(|g| !g.c.is_whitespace())
+        .filter(|g| {
+            let c = center(&g.rect);
+            !boxes
+                .iter()
+                .any(|b| !b.c.is_whitespace() && inside(&b.rect, c))
+        })
+        .collect();
+
+    // Runs: glyphs next to each other on one line, in content order.
+    let mut runs: Vec<Vec<Glyph>> = Vec::new();
+    for glyph in missing {
+        let joins = runs.last().and_then(|run| run.last()).is_some_and(|last| {
+            let gap = glyph.rect.x - (last.rect.x + last.rect.width);
+            let (_, cy) = center(&glyph.rect);
+            let overlap = cy >= last.rect.y - last.rect.height / 2.0
+                && cy <= last.rect.y + last.rect.height * 1.5;
+            overlap && (-0.01..0.04).contains(&gap)
+        });
+        match runs.last_mut() {
+            Some(run) if joins => run.push(glyph),
+            _ => runs.push(vec![glyph]),
+        }
+    }
+
+    for run in runs {
+        let x0 = run.iter().map(|g| g.rect.x).fold(f32::MAX, f32::min);
+        let x1 = run
+            .iter()
+            .map(|g| g.rect.x + g.rect.width)
+            .fold(f32::MIN, f32::max);
+        let y0 = run.iter().map(|g| g.rect.y).fold(f32::MAX, f32::min);
+        let y1 = run
+            .iter()
+            .map(|g| g.rect.y + g.rect.height)
+            .fold(f32::MIN, f32::max);
+        let on_line = |b: &CharBox| {
+            let (_, cy) = center(&b.rect);
+            cy >= y0 && cy <= y1
+        };
+        // The blanks and line breaks PDFium made of the run. A line break
+        // there is kept when it really ends the line: nothing on this line
+        // follows it.
+        let blank: Vec<bool> = (0..boxes.len())
+            .map(|i| {
+                let b = &boxes[i];
+                let (cx, _) = center(&b.rect);
+                let inside =
+                    b.c.is_whitespace() && on_line(b) && cx > x0 + WORD_GAP && cx < x1 - WORD_GAP;
+                let ends_line = is_break(b.c)
+                    && !boxes[i + 1..]
+                        .iter()
+                        .find(|n| !is_break(n.c))
+                        .is_some_and(on_line);
+                inside && !ends_line
+            })
+            .collect();
+        let mut index = 0;
+        boxes.retain(|_| {
+            index += 1;
+            !blank[index - 1]
+        });
+        let at = boxes
+            .iter()
+            .rposition(|b| on_line(b) && !is_break(b.c) && center(&b.rect).0 <= x0)
+            .map(|i| i + 1)
+            .or_else(|| boxes.iter().position(on_line))
+            .unwrap_or(boxes.len());
+        let mut added: Vec<CharBox> = run
+            .iter()
+            .zip(recover::run_text(&run))
+            .flat_map(|(g, text)| {
+                let rect = g.rect;
+                text.chars()
+                    .map(move |c| CharBox { c, rect })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        // Spaces where the run stands apart from the words around it.
+        let spaced = |b: Option<&CharBox>, gap: f32| {
+            b.is_some_and(|b| !b.c.is_whitespace() && on_line(b)) && gap > WORD_GAP
+        };
+        let before = at.checked_sub(1).and_then(|i| boxes.get(i));
+        if spaced(
+            before,
+            before.map_or(0.0, |b| x0 - (b.rect.x + b.rect.width)),
+        ) {
+            let rect = NormRect {
+                width: 0.0,
+                ..run[0].rect
+            };
+            added.insert(0, CharBox { c: ' ', rect });
+        }
+        let after = boxes.get(at);
+        if spaced(after, after.map_or(0.0, |b| b.rect.x - x1)) {
+            let rect = NormRect {
+                x: x1,
+                width: 0.0,
+                ..run[run.len() - 1].rect
+            };
+            added.push(CharBox { c: ' ', rect });
+        }
+        boxes.splice(at..at, added);
+    }
+    boxes
 }
 
 /// The first and last character of the line holding `chars[index]`: the
@@ -1166,6 +1375,53 @@ mod tests {
         assert_eq!(text, ["page", "middle", "last"]);
         assert_eq!(parts.iter().map(|p| p.page).collect::<Vec<_>>(), [0, 1, 2]);
         assert!(select_pages((0, (0.0, 0.0)), (1, (0.0, 0.0)), |_| Chars::from([])).is_empty());
+    }
+
+    #[test]
+    fn recovered_formulas_replace_the_blanks_pdfium_left() {
+        let at = |c: char, x: f32, y: f32| CharBox {
+            c,
+            rect: NormRect {
+                x,
+                y,
+                width: if c.is_whitespace() { 0.0 } else { 0.02 },
+                height: 0.03,
+            },
+        };
+        let glyph = |c: char, x: f32, y: f32, size: f32, baseline: f32| Glyph {
+            c,
+            rect: NormRect {
+                x,
+                y,
+                width: 0.02,
+                height: 0.03,
+            },
+            baseline,
+            size,
+        };
+        let mut page = boxes("ab", 0.1);
+        // PDFium's blanks inside the formula, including a bogus line break.
+        page.extend([at(' ', 0.16, 0.1), at('\r', 0.17, 0.1), at('\n', 0.17, 0.1)]);
+        page.extend([at(',', 0.25, 0.1), at('\r', 0.27, 0.1), at('\n', 0.27, 0.1)]);
+        // A formula ending a line, after which PDFium's line break is real.
+        page.extend(boxes("34", 0.3));
+        page.extend([
+            at('\r', 0.145, 0.3),
+            at('\n', 0.145, 0.3),
+            at('b', 0.1, 0.4),
+        ]);
+        let glyphs = vec![
+            glyph('𝑥', 0.15, 0.1, 11.0, 0.125),
+            glyph('2', 0.17, 0.095, 8.0, 0.115),
+            glyph('=', 0.19, 0.1, 11.0, 0.125),
+            glyph('0', 0.21, 0.1, 11.0, 0.125),
+            // PDFium already reads this one.
+            glyph('a', 0.10, 0.1, 11.0, 0.125),
+            glyph('c', 0.15, 0.3, 11.0, 0.325),
+            glyph('m', 0.17, 0.3, 11.0, 0.325),
+        ];
+        let text: String = merge_recovered(page, glyphs).iter().map(|b| b.c).collect();
+        assert_eq!(text, "ab x²=0 ,\r\n34 cm\r\nb");
     }
 
     #[test]

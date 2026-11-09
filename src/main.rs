@@ -10,6 +10,7 @@ mod layout;
 mod nav;
 mod palette;
 mod pdf;
+mod recover;
 mod search;
 mod store;
 mod titlebar;
