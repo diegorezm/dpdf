@@ -9,9 +9,16 @@ fn main() {
     slint_build::compile("ui/app.slint").expect("failed to compile ui/app.slint");
     println!("cargo:rerun-if-changed=build.rs");
 
+    println!("cargo:rerun-if-changed=assets/icon.ico");
+
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         if let Err(err) = provide_pdfium() {
             println!("cargo:warning=could not provide pdfium.dll: {err}");
+        }
+        let mut res = winresource::WindowsResource::new();
+        res.set_icon("assets/icon.ico");
+        if let Err(err) = res.compile() {
+            println!("cargo:warning=could not embed the icon: {err}");
         }
     }
 }

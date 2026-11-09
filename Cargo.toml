@@ -1,6 +1,6 @@
 [package]
 name = "dpdf"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 description = "A fast, minimal, local-first PDF reader for Windows, built with Rust and Slint."
 license = "MIT"
@@ -23,6 +23,8 @@ pdfium-render = { version = "0.9.5", default-features = false, features = ["pdfi
 
 [build-dependencies]
 slint-build = "1.18"
+# Embeds the icon and version info in dpdf.exe (Explorer, taskbar, installer).
+winresource = { version = "0.1", default-features = false }
 
 # Debug builds still optimize dependencies (Slint, PDFium bindings), so
 # `cargo run` scrolls smoothly; our own code stays fast to compile.
