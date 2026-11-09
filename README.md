@@ -61,11 +61,12 @@ The defaults. All of them can be changed (see [Customizing](#customizing)), and 
 | `←` `→` `PgUp` `PgDn` / `↑` `↓` | Previous / next page / scroll |
 | `Home` / `End` | First / last page |
 | `Ctrl+C` / `Ctrl+H` / `Ctrl+N` | Copy / highlight / add a note to the selection |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo annotation changes |
 | `Ctrl+Shift+E` | Export notes as Markdown |
 | `Ctrl+,` | Settings |
 | `Esc` | Close overlay, clear selection, leave fullscreen or focus mode |
 
-With **vim keys** on: `j` `k` `h` `l` scroll, `Ctrl+D` / `Ctrl+U` half screen, `J` / `K` next / previous page, `gg` / `G` first / last page, `/` search, `n` / `N` next / previous match, `:` palette, `gt` / `gT` tabs, `zi` `zo` `zw` `zp` zoom, `y` copy, `t` sidebar.
+With **vim keys** on: `j` `k` `h` `l` scroll, `Ctrl+D` / `Ctrl+U` half screen, `J` / `K` next / previous page, `gg` / `G` first / last page, `/` search, `n` / `N` next / previous match, `:` palette, `gt` / `gT` tabs, `zi` `zo` `zw` `zp` zoom, `y` copy, `u` / `Ctrl+R` undo / redo, `t` sidebar.
 
 ## Customizing
 

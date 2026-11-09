@@ -168,6 +168,48 @@ impl Annotations {
     }
 }
 
+/// Undo and redo for annotation changes. Each entry is a snapshot of the
+/// annotations before a change; documents have few annotations, so
+/// snapshots are cheap and can't drift out of sync the way inverse
+/// operations can.
+#[derive(Debug, Default)]
+pub struct History {
+    undo: Vec<Vec<Annotation>>,
+    redo: Vec<Vec<Annotation>>,
+}
+
+/// Changes remembered per document.
+const HISTORY_LIMIT: usize = 200;
+
+impl History {
+    /// Call before changing `current`.
+    pub fn record(&mut self, current: &[Annotation]) {
+        self.undo.push(current.to_vec());
+        if self.undo.len() > HISTORY_LIMIT {
+            self.undo.remove(0);
+        }
+        self.redo.clear();
+    }
+
+    /// The state to restore, or `None` if there is nothing to undo.
+    pub fn undo(&mut self, current: &[Annotation]) -> Option<Vec<Annotation>> {
+        let previous = self.undo.pop()?;
+        self.redo.push(current.to_vec());
+        Some(previous)
+    }
+
+    pub fn redo(&mut self, current: &[Annotation]) -> Option<Vec<Annotation>> {
+        let next = self.redo.pop()?;
+        self.undo.push(current.to_vec());
+        Some(next)
+    }
+
+    pub fn clear(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+    }
+}
+
 fn file_for(doc: &Path) -> Option<PathBuf> {
     let key = doc.to_string_lossy().to_lowercase();
     Some(
@@ -308,6 +350,36 @@ mod tests {
         let text = toml::to_string(&a).unwrap();
         let back: Annotations = toml::from_str(&text).unwrap();
         assert_eq!(back.items, a.items);
+    }
+
+    #[test]
+    fn undo_and_redo() {
+        let mut a = Annotations::default();
+        let mut history = History::default();
+
+        history.record(&a.items);
+        let id = a.add(0, Kind::Highlight, "yellow", "x".into(), vec![rect(0.1)], 0);
+        history.record(&a.items);
+        if let Some(item) = a.get_mut(id) {
+            item.color = "red".into();
+        }
+
+        a.items = history.undo(&a.items).unwrap();
+        assert_eq!(a.items[0].color, "yellow");
+        a.items = history.undo(&a.items).unwrap();
+        assert!(a.items.is_empty());
+        assert!(history.undo(&a.items).is_none());
+
+        a.items = history.redo(&a.items).unwrap();
+        a.items = history.redo(&a.items).unwrap();
+        assert_eq!(a.items[0].color, "red");
+        assert!(history.redo(&a.items).is_none());
+
+        // A new change drops what could be redone.
+        a.items = history.undo(&a.items).unwrap();
+        history.record(&a.items);
+        a.remove(id);
+        assert!(history.redo(&a.items).is_none());
     }
 
     #[test]

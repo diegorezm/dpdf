@@ -355,6 +355,16 @@ impl App {
                 let outcome = self.viewer.selection_action(window, action);
                 self.popup_outcome(window, outcome);
             }
+            Action::Undo | Action::Redo => {
+                if !self.viewer.undo(window, action == Action::Redo) {
+                    let what = if action == Action::Redo {
+                        "redo"
+                    } else {
+                        "undo"
+                    };
+                    self.flash(window, &format!("Nothing to {what}"));
+                }
+            }
             Action::ExportNotes => self.export_notes(window),
             Action::ReloadConfig => {
                 self.reload_config(window);

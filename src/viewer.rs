@@ -9,7 +9,7 @@ use std::rc::Rc;
 
 use slint::{Color, ComponentHandle, Image, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
 
-use crate::annotations::{self, Annotations, Kind};
+use crate::annotations::{self, Annotations, History, Kind};
 use crate::config::{parse_color, DefaultZoom};
 use crate::keymap::Action;
 use crate::layout::{self, Layout, Zoom};
@@ -96,6 +96,7 @@ pub struct Viewer {
     next_search_id: u64,
 
     annotations: Annotations,
+    history: History,
     selection: Option<Selection>,
     drag: Option<Drag>,
     popup: Popup,
@@ -142,6 +143,7 @@ impl Viewer {
             search: None,
             next_search_id: 0,
             annotations: Annotations::default(),
+            history: History::default(),
             selection: None,
             drag: None,
             popup: Popup::None,
@@ -243,6 +245,7 @@ impl Viewer {
         self.popup = Popup::None;
         self.note_target = None;
         self.annotations = Annotations::default();
+        self.history.clear();
         self.close_search(window);
     }
 
@@ -778,13 +781,17 @@ impl Viewer {
 
     fn annotation_action(&mut self, id: u64, action: &str, color: &str) -> PopupOutcome {
         match action {
-            "delete" => self.annotations.remove(id),
+            "delete" => {
+                self.history.record(&self.annotations.items);
+                self.annotations.remove(id);
+            }
             "note" => return self.edit_note(id),
             "copy" => {
                 let text = self.annotations.get(id).map(|a| a.text.clone());
                 return text.map_or(PopupOutcome::Nothing, |t| copy_text(&t));
             }
             _ => {
+                self.history.record(&self.annotations.items);
                 if let Some(a) = self.annotations.get_mut(id) {
                     match action {
                         "color" => a.color = color.to_owned(),
@@ -817,6 +824,7 @@ impl Viewer {
 
     fn annotate(&mut self, kind: Kind, color: &str) -> Option<u64> {
         let selection = self.selection.take()?;
+        self.history.record(&self.annotations.items);
         Some(self.annotations.add(
             selection.page,
             kind,
@@ -846,15 +854,38 @@ impl Viewer {
     }
 
     pub fn note_saved(&mut self, window: &AppWindow, note: &str) {
-        if let Some(a) = self
-            .note_target
-            .take()
-            .and_then(|id| self.annotations.get_mut(id))
-        {
-            a.note = note.trim().to_owned();
+        let note = note.trim();
+        let target = self.note_target.take();
+        let changed = target
+            .and_then(|id| self.annotations.get(id))
+            .is_some_and(|a| a.note != note);
+        if changed {
+            self.history.record(&self.annotations.items);
+            if let Some(a) = target.and_then(|id| self.annotations.get_mut(id)) {
+                a.note = note.to_owned();
+            }
         }
         self.save_annotations(window);
         self.refresh(window);
+    }
+
+    /// Undoes (or redoes) the last annotation change. Returns false if
+    /// there was nothing to undo.
+    pub fn undo(&mut self, window: &AppWindow, redo: bool) -> bool {
+        let restored = if redo {
+            self.history.redo(&self.annotations.items)
+        } else {
+            self.history.undo(&self.annotations.items)
+        };
+        let Some(items) = restored else {
+            return false;
+        };
+        self.annotations.items = items;
+        self.selection = None;
+        self.popup = Popup::None;
+        self.save_annotations(window);
+        self.refresh(window);
+        true
     }
 
     pub fn note_cancelled(&mut self) {

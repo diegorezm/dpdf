@@ -68,6 +68,8 @@ actions! {
     Copy => "copy", "Copy selected text";
     Highlight => "highlight", "Highlight selection";
     AddNote => "add-note", "Add note to selection";
+    Undo => "undo", "Undo annotation change";
+    Redo => "redo", "Redo annotation change";
     ExportNotes => "export-notes", "Export notes as Markdown…";
     ReloadConfig => "reload-config", "Reload config and themes";
     OpenConfig => "open-config", "Open config.toml";
@@ -108,6 +110,9 @@ const DEFAULT_KEYS: &[(Action, &str)] = &[
     (Action::Copy, "ctrl+c"),
     (Action::Highlight, "ctrl+h"),
     (Action::AddNote, "ctrl+n"),
+    (Action::Undo, "ctrl+z"),
+    (Action::Redo, "ctrl+y"),
+    (Action::Redo, "ctrl+shift+z"),
     (Action::ExportNotes, "ctrl+shift+e"),
     (Action::Escape, "escape"),
 ];
@@ -134,6 +139,8 @@ const VIM_KEYS: &[(Action, &str)] = &[
     (Action::FitWidth, "z w"),
     (Action::FitPage, "z p"),
     (Action::Copy, "y"),
+    (Action::Undo, "u"),
+    (Action::Redo, "ctrl+r"),
     (Action::ToggleSidebar, "t"),
 ];
 
