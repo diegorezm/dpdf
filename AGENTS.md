@@ -36,7 +36,7 @@ The app is personal first, but code should be clean enough to open-source later.
 | Language | **Rust** (stable, edition 2021) | Native performance, memory safety, small binaries. |
 | UI | **Slint** | Native, lightweight declarative UI; no browser engine; compiles `.slint` markup into Rust. |
 | Rendering | **PDFium** via `pdfium-render` | Mature, fast, accurate rendering and text extraction. |
-| Manipulation (later) | `lopdf` | Merge/split/rotate/extract pages without heavy deps. |
+| Text recovery | `lopdf`, `ttf-parser` | Reads glyph IDs from content streams and names them through the font, for PDFs whose text maps to blanks (Word equations). Later also page manipulation. |
 
 **Forbidden:** Electron, Tauri, WebViews, React/Svelte/any JS, browser engines. Performance and native feel are product requirements, not later optimizations.
 
@@ -128,6 +128,7 @@ src/
   app.rs          // tabs + session, keys -> actions, palette, settings, themes, overlays
   viewer.rs       // the open document: layout, render cache, search, selection, annotations
   pdf.rs          // PDFium worker thread: open, render, search, select text (no Slint types)
+  recover.rs      // text a PDF draws but maps to blanks, read from glyph IDs and fonts
   layout.rs       // pure page-strip geometry, zoom modes
   cache.rs        // pure page cache bounded by a memory budget
   keymap.rs       // actions, key chords and sequences, default + vim bindings
@@ -153,7 +154,7 @@ The PDF worker processes one small unit at a time (text selection > page render 
 
 Rules:
 - `.slint` files expose properties and callbacks; they contain no business logic beyond trivial layout/visibility bindings.
-- `pdf`, `layout`, `cache`, `nav`, `keymap`, `palette`, `search`, `annotations`, `config`, `store` must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs`, `app.rs`, and `viewer.rs` touch Slint types.
+- `pdf`, `recover`, `layout`, `cache`, `nav`, `keymap`, `palette`, `search`, `annotations`, `config`, `store` must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs`, `app.rs`, and `viewer.rs` touch Slint types.
 - State flows one way: UI callback → `Action` → controller updates state → controller pushes properties to UI.
 - Paths: everything user-owned lives in `%APPDATA%\dpdf` (`config.toml`, `themes\`, `annotations\`, `state.txt`); caches go in `%LOCALAPPDATA%\dpdf`. Never write next to the executable, in the document folder, or into the PDF.
 - User files must never block startup: parse leniently, fall back to defaults, and report problems in Settings.
