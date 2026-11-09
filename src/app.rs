@@ -100,6 +100,11 @@ impl App {
             .find(|t| t.name.eq_ignore_ascii_case(&self.config.theme))
             .or(self.themes.first())
             .cloned();
+        let font_size = self.config.font_size.clamp(10.0, 24.0);
+        for t in [window.global::<Theme>(), self.settings.global::<Theme>()] {
+            t.set_font_family(self.config.font.as_str().into());
+            t.set_font_size(font_size);
+        }
         if let Some(theme) = &theme {
             apply_theme(&window.global::<Theme>(), theme);
             apply_theme(&self.settings.global::<Theme>(), theme);

@@ -76,9 +76,11 @@ Everything lives in `%APPDATA%\dpdf\` (Settings → General → Data folder):
 | `annotations\*.toml` | Highlights and notes, one file per document. |
 | `state.txt` | Recent files, reading positions, and the last session. |
 
-Keybindings in `config.toml`:
+Font, keybindings, and more in `config.toml`:
 
 ```toml
+font = "Segoe UI Variable Text"  # any installed font, e.g. "Inter"
+font_size = 14
 vim = true
 
 [keys]

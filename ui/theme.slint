@@ -17,7 +17,9 @@ export global Theme {
     out property <length> radius: 6px;
     out property <length> header-height: 40px;
     out property <length> sidebar-width: 180px;
-    out property <length> font-size: 13px;
-    out property <length> font-size-small: 11px;
-    out property <length> font-size-large: 15px;
+    // Interface font, set from config.toml (`font`, `font_size`).
+    in-out property <string> font-family: "Segoe UI Variable Text";
+    in-out property <length> font-size: 14px;
+    out property <length> font-size-small: root.font-size - 2px;
+    out property <length> font-size-large: root.font-size + 2px;
 }

@@ -41,6 +41,10 @@ pub struct Config {
     /// Reopen the tabs from the last session on startup.
     pub restore_session: bool,
     pub sidebar: bool,
+    /// Interface font family, e.g. "Segoe UI Variable Text" or "Inter".
+    pub font: String,
+    /// Interface font size in logical pixels.
+    pub font_size: f32,
     /// Adds vim-style keys (j/k, gg/G, ctrl+d/u, /, n/N, :).
     pub vim: bool,
     /// Overrides: action name -> key sequences, e.g. `open = ["ctrl+o"]`.
@@ -56,6 +60,8 @@ impl Default for Config {
             default_zoom: DefaultZoom::FitWidth,
             restore_session: true,
             sidebar: true,
+            font: "Segoe UI Variable Text".to_owned(),
+            font_size: 14.0,
             vim: false,
             keys: BTreeMap::new(),
         }
