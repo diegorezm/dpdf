@@ -88,7 +88,26 @@ fn main() -> Result<(), slint::PlatformError> {
     });
 
     on!(window.on_scrolled, |app, win| app.viewer().scrolled(&win));
-    on!(window.on_resized, |app, win| app.viewer().relayout(&win));
+    // While the window is being resized, pages are stretched and only
+    // re-rendered once resizing pauses.
+    let resize_timer = slint::Timer::default();
+    let weak = window.as_weak();
+    window.on_resized(move || {
+        let Some(win) = weak.upgrade() else {
+            return;
+        };
+        with_app(|app| app.viewer().resized(&win));
+        let weak = weak.clone();
+        resize_timer.start(
+            slint::TimerMode::SingleShot,
+            std::time::Duration::from_millis(120),
+            move || {
+                if let Some(win) = weak.upgrade() {
+                    with_app(|app| app.viewer().resize_settled(&win));
+                }
+            },
+        );
+    });
     on!(window.on_thumbs_scrolled, |app, win| app
         .viewer()
         .thumbs_scrolled(&win));

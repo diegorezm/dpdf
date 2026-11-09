@@ -138,6 +138,9 @@ pub struct Viewer {
     side_items: Rc<VecModel<SideItem>>,
     /// The page each side item jumps to.
     side_pages: Vec<usize>,
+    /// Set while the window is being resized: keep showing stretched
+    /// pages instead of rendering every intermediate size.
+    renders_held: bool,
     /// Passwords typed this run, so switching tabs doesn't ask again.
     /// Never written to disk.
     passwords: HashMap<PathBuf, String>,
@@ -195,6 +198,7 @@ impl Viewer {
             side_items,
             side_pages: Vec::new(),
             passwords: HashMap::new(),
+            renders_held: false,
         };
         viewer.update_recent();
         viewer
@@ -390,6 +394,16 @@ impl Viewer {
     }
 
     /// Recomputes page positions after a resize, zoom, or new document.
+    pub fn resized(&mut self, window: &AppWindow) {
+        self.renders_held = true;
+        self.relayout(window);
+    }
+
+    pub fn resize_settled(&mut self, window: &AppWindow) {
+        self.renders_held = false;
+        self.refresh(window);
+    }
+
     pub fn relayout(&mut self, window: &AppWindow) {
         if self.page_sizes.is_empty() {
             return;
@@ -1314,6 +1328,9 @@ impl Viewer {
         visible: Range<usize>,
         preload: Range<usize>,
     ) {
+        if self.renders_held {
+            return;
+        }
         let width_px = self.target_width_px(window);
         let key = (preload.clone(), width_px);
         if self.last_request.as_ref() == Some(&key) {
