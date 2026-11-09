@@ -8,7 +8,8 @@ use std::rc::Rc;
 use slint::{ComponentHandle, Model, VecModel};
 
 use crate::config::{
-    self, built_in_themes, load_themes, Config, DefaultZoom, PageColors, ThemeDef,
+    self, built_in_themes, load_themes, Config, Corners, DefaultZoom, Density, PageColors,
+    ThemeDef, ThumbnailSize,
 };
 use crate::keymap::{Action, Chord, KeyResult, Keymap};
 use crate::palette::{self, Entry, Target};
@@ -117,11 +118,28 @@ impl App {
             .find(|t| t.name.eq_ignore_ascii_case(&self.config.theme))
             .or(self.themes.first())
             .cloned();
-        let font_size = self.config.font_size.clamp(10.0, 24.0);
+        let metrics = self.config.metrics();
         for t in [window.global::<Theme>(), self.settings.global::<Theme>()] {
             t.set_font_family(self.config.font.as_str().into());
-            t.set_font_size(font_size);
+            t.set_font_size(self.config.font_size());
+            t.set_spacing(metrics.spacing);
+            t.set_radius(metrics.radius);
+            t.set_header_height(metrics.header_height);
+            t.set_sidebar_width(metrics.sidebar_width);
         }
+        self.viewer.set_sidebar_width(window, metrics.sidebar_width);
+        let mut fonts: Vec<slint::SharedString> =
+            config::FONTS.iter().map(|f| (*f).into()).collect();
+        if !config::FONTS.contains(&self.config.font.as_str()) {
+            fonts.insert(0, self.config.font.as_str().into());
+        }
+        let s = &self.settings;
+        s.set_font_options(Rc::new(VecModel::from(fonts)).into());
+        s.set_font_name(self.config.font.as_str().into());
+        s.set_font_size(self.config.font_size().round() as i32);
+        s.set_density(label(self.config.density).into());
+        s.set_corners(label(self.config.corners).into());
+        s.set_thumbnail_size(label(self.config.thumbnail_size).into());
         self.title_colors = theme.as_ref().map(|t| {
             (
                 to_color(&t.background),
@@ -258,6 +276,33 @@ impl App {
                 }
             }
             "restore-session" => self.config.restore_session = on,
+            "font" => self.config.font = value.to_owned(),
+            "font-size" => {
+                let step = if value == "-" { -1.0 } else { 1.0 };
+                self.config.font_size = (self.config.font_size() + step)
+                    .clamp(config::MIN_FONT_SIZE, config::MAX_FONT_SIZE);
+            }
+            "density" => {
+                self.config.density = match value {
+                    "Compact" => Density::Compact,
+                    "Spacious" => Density::Spacious,
+                    _ => Density::Comfortable,
+                }
+            }
+            "corners" => {
+                self.config.corners = match value {
+                    "Sharp" => Corners::Sharp,
+                    "Round" => Corners::Round,
+                    _ => Corners::Rounded,
+                }
+            }
+            "thumbnail-size" => {
+                self.config.thumbnail_size = match value {
+                    "Small" => ThumbnailSize::Small,
+                    "Large" => ThumbnailSize::Large,
+                    _ => ThumbnailSize::Medium,
+                }
+            }
             "sidebar" => {
                 self.config.sidebar = on;
                 window.set_sidebar_visible(on);
@@ -926,7 +971,7 @@ const SECTION_WORDS: [&str; 6] = [
     "general session sessions restore startup tabs attach",
     "reading zoom fit width page default sidebar thumbnails vim keyboard",
     "theme themes colors dark light custom",
-    "appearance page colors inverted night dark",
+    "appearance interface font text size density spacing compact corners rounded thumbnails page colors inverted night dark",
     "keybindings keys shortcuts bindings vim",
     "configuration config files toml data folder reload",
 ];
@@ -942,6 +987,11 @@ fn matching_sections(query: &str) -> [bool; 6] {
     });
     shown[4] |= action_match;
     shown
+}
+
+/// The Settings label for a config choice, e.g. `Density::Compact` -> "Compact".
+fn label(value: impl std::fmt::Debug) -> String {
+    format!("{value:?}")
 }
 
 fn session_detail(session: &Session, current: bool) -> String {

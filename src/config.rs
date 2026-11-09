@@ -31,6 +31,60 @@ pub enum DefaultZoom {
     FitPage,
 }
 
+/// How much room the interface takes: spacing and header height.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum Density {
+    Compact,
+    #[default]
+    Comfortable,
+    Spacious,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum Corners {
+    Sharp,
+    #[default]
+    Rounded,
+    Round,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ThumbnailSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+/// Interface fonts offered in Settings. Any installed font also works
+/// when typed into config.toml.
+pub const FONTS: [&str; 10] = [
+    "Segoe UI Variable Text",
+    "Segoe UI",
+    "Bahnschrift",
+    "Calibri",
+    "Arial",
+    "Verdana",
+    "Tahoma",
+    "Georgia",
+    "Cascadia Code",
+    "Consolas",
+];
+
+pub const MIN_FONT_SIZE: f32 = 10.0;
+pub const MAX_FONT_SIZE: f32 = 22.0;
+
+/// Pixel values for the layout choices.
+pub struct UiMetrics {
+    pub spacing: f32,
+    pub header_height: f32,
+    pub radius: f32,
+    pub sidebar_width: f32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -45,6 +99,9 @@ pub struct Config {
     pub font: String,
     /// Interface font size in logical pixels.
     pub font_size: f32,
+    pub density: Density,
+    pub corners: Corners,
+    pub thumbnail_size: ThumbnailSize,
     /// Adds vim-style keys (j/k, gg/G, ctrl+d/u, /, n/N, :).
     pub vim: bool,
     /// Overrides: action name -> key sequences, e.g. `open = ["ctrl+o"]`.
@@ -62,6 +119,9 @@ impl Default for Config {
             sidebar: true,
             font: "Segoe UI Variable Text".to_owned(),
             font_size: 14.0,
+            density: Density::Comfortable,
+            corners: Corners::Rounded,
+            thumbnail_size: ThumbnailSize::Medium,
             vim: false,
             keys: BTreeMap::new(),
         }
@@ -69,6 +129,37 @@ impl Default for Config {
 }
 
 impl Config {
+    pub fn font_size(&self) -> f32 {
+        if self.font_size.is_finite() {
+            self.font_size.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE)
+        } else {
+            14.0
+        }
+    }
+
+    pub fn metrics(&self) -> UiMetrics {
+        let (spacing, header_height) = match self.density {
+            Density::Compact => (9.0, 34.0),
+            Density::Comfortable => (12.0, 40.0),
+            Density::Spacious => (16.0, 48.0),
+        };
+        UiMetrics {
+            spacing,
+            // The header grows with the text so large fonts still fit.
+            header_height: header_height + (self.font_size() - 14.0).max(0.0) * 2.0,
+            radius: match self.corners {
+                Corners::Sharp => 0.0,
+                Corners::Rounded => 6.0,
+                Corners::Round => 11.0,
+            },
+            sidebar_width: match self.thumbnail_size {
+                ThumbnailSize::Small => 140.0,
+                ThumbnailSize::Medium => 180.0,
+                ThumbnailSize::Large => 240.0,
+            },
+        }
+    }
+
     /// Loads the config. A parse error yields defaults plus the message.
     pub fn load() -> (Self, Option<String>) {
         let Some(path) = data_dir().map(|d| d.join("config.toml")) else {
@@ -336,6 +427,26 @@ mod tests {
         assert_eq!(parse_color("#10203040"), Some([16, 32, 48, 64]));
         assert_eq!(parse_color("102030"), None);
         assert_eq!(parse_color("#12345"), None);
+    }
+
+    #[test]
+    fn metrics_and_font_size() {
+        let mut config = Config {
+            density: Density::Compact,
+            corners: Corners::Sharp,
+            thumbnail_size: ThumbnailSize::Large,
+            font_size: 99.0,
+            ..Config::default()
+        };
+        assert_eq!(config.font_size(), MAX_FONT_SIZE);
+        let m = config.metrics();
+        assert_eq!((m.spacing, m.radius, m.sidebar_width), (9.0, 0.0, 240.0));
+        assert!(m.header_height > 34.0);
+        config.font_size = f32::NAN;
+        assert_eq!(config.font_size(), 14.0);
+        let parsed: Config = toml::from_str("density = \"spacious\"\ncorners = \"round\"").unwrap();
+        assert_eq!(parsed.density, Density::Spacious);
+        assert_eq!(parsed.corners, Corners::Round);
     }
 
     #[test]

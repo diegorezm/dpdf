@@ -13,10 +13,12 @@ export global Theme {
     in-out property <color> match: #f5c54255;
     in-out property <color> match-current: #f59b2a99;
 
-    out property <length> spacing: 12px;
-    out property <length> radius: 6px;
-    out property <length> header-height: 40px;
-    out property <length> sidebar-width: 180px;
+    // Layout tokens, set from config.toml (`density`, `corners`,
+    // `thumbnail_size`).
+    in-out property <length> spacing: 12px;
+    in-out property <length> radius: 6px;
+    in-out property <length> header-height: 40px;
+    in-out property <length> sidebar-width: 180px;
     // Interface font, set from config.toml (`font`, `font_size`).
     in-out property <string> font-family: "Segoe UI Variable Text";
     in-out property <length> font-size: 14px;

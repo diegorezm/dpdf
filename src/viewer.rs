@@ -26,8 +26,6 @@ const KEEP: usize = 4;
 /// Thumbnails rendered around the visible ones, and kept beyond that.
 const THUMB_PRELOAD: usize = 6;
 const THUMB_KEEP: usize = 20;
-/// Must match `Theme.sidebar-width`.
-const SIDEBAR_WIDTH: f32 = 180.0;
 /// Recent documents listed on the start screen.
 const RECENT_SHOWN: usize = 8;
 /// Line scroll step, in logical pixels.
@@ -88,6 +86,8 @@ pub struct Viewer {
     shown_thumbs: Option<Range<usize>>,
 
     thumb_layout: Layout,
+    /// Matches `Theme.sidebar-width`.
+    sidebar_width: f32,
     thumbs: Rc<VecModel<ThumbView>>,
     thumb_cache: HashMap<usize, Image>,
     last_thumb_request: Option<Range<usize>>,
@@ -137,6 +137,7 @@ impl Viewer {
             shown_pages: None,
             shown_thumbs: None,
             thumb_layout: Layout::default(),
+            sidebar_width: 180.0,
             thumbs,
             thumb_cache: HashMap::new(),
             last_thumb_request: None,
@@ -275,6 +276,18 @@ impl Viewer {
         };
     }
 
+    /// Thumbnails are laid out for the sidebar width; re-render on change.
+    pub fn set_sidebar_width(&mut self, window: &AppWindow, width: f32) {
+        if width == self.sidebar_width {
+            return;
+        }
+        self.sidebar_width = width;
+        self.thumb_layout = Layout::default();
+        self.thumb_cache.clear();
+        self.last_thumb_request = None;
+        self.relayout(window);
+    }
+
     pub fn set_inverted(&mut self, window: &AppWindow, inverted: bool) {
         self.worker.send(Request::SetInverted(inverted));
         self.cache.clear();
@@ -323,7 +336,7 @@ impl Viewer {
         self.clamp_x(window);
 
         if self.thumb_layout.page_count() != self.page_sizes.len() {
-            self.thumb_layout = Layout::new(&self.page_sizes, SIDEBAR_WIDTH, 1.0);
+            self.thumb_layout = Layout::new(&self.page_sizes, self.sidebar_width, 1.0);
             window.set_thumbs_content_height(self.thumb_layout.content_height());
         }
         self.refresh(window);

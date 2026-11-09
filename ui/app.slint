@@ -682,6 +682,12 @@ export component SettingsWindow inherits Window {
     in property <[ThemeCard]> theme-cards;
     in property <string> theme-name;
     in property <string> page-colors;
+    in property <[string]> font-options;
+    in property <string> font-name;
+    in property <int> font-size;
+    in property <string> density;
+    in property <string> corners;
+    in property <string> thumbnail-size;
     in property <string> default-zoom;
     in property <bool> restore-session;
     in property <bool> sidebar-default;
@@ -722,6 +728,12 @@ export component SettingsWindow inherits Window {
             show-files: root.show-files;
             theme: root.theme-name;
             page-colors: root.page-colors;
+            font-options: root.font-options;
+            font-name: root.font-name;
+            font-size: root.font-size;
+            density: root.density;
+            corners: root.corners;
+            thumbnail-size: root.thumbnail-size;
             default-zoom: root.default-zoom;
             restore-session: root.restore-session;
             sidebar: root.sidebar-default;

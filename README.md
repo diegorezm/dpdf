@@ -83,7 +83,10 @@ Font, keybindings, and more in `config.toml`:
 
 ```toml
 font = "Segoe UI Variable Text"  # any installed font, e.g. "Inter"
-font_size = 14
+font_size = 14                   # 10 to 22
+density = "comfortable"          # compact, comfortable, spacious
+corners = "rounded"              # sharp, rounded, round
+thumbnail_size = "medium"        # small, medium, large
 vim = true
 
 [keys]

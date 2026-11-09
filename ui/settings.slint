@@ -173,6 +173,12 @@ export component SettingsView inherits Rectangle {
     in property <[ThemeCard]> theme-cards;
     in property <string> theme;
     in property <string> page-colors;
+    in property <[string]> font-options;
+    in property <string> font-name;
+    in property <int> font-size;
+    in property <string> density;
+    in property <string> corners;
+    in property <string> thumbnail-size;
     in property <string> default-zoom;
     in property <bool> restore-session;
     in property <bool> sidebar;
@@ -518,6 +524,82 @@ export component SettingsView inherits Rectangle {
 
                     if root.section == "appearance": VerticalLayout {
                         spacing: Theme.spacing;
+
+                        SectionTitle {
+                            text: "Interface";
+                        }
+                        Card {
+                            Row {
+                                title: "Font";
+                                description: "Any installed font also works in config.toml.";
+                                Select {
+                                    options: root.font-options;
+                                    value: root.font-name;
+                                    selected(value) => {
+                                        root.set("font", value);
+                                    }
+                                }
+                            }
+                            Row {
+                                title: "Text size";
+                                HorizontalLayout {
+                                    spacing: 4px;
+
+                                    Button {
+                                        text: "−";
+                                        clicked => {
+                                            root.set("font-size", "-");
+                                        }
+                                    }
+                                    Text {
+                                        width: 48px;
+                                        text: "\{root.font-size}px";
+                                        color: Theme.text;
+                                        font-size: Theme.font-size;
+                                        vertical-alignment: center;
+                                        horizontal-alignment: center;
+                                    }
+                                    Button {
+                                        text: "+";
+                                        clicked => {
+                                            root.set("font-size", "+");
+                                        }
+                                    }
+                                }
+                            }
+                            Row {
+                                title: "Density";
+                                description: "Spacing and header height.";
+                                Select {
+                                    options: ["Compact", "Comfortable", "Spacious"];
+                                    value: root.density;
+                                    selected(value) => {
+                                        root.set("density", value);
+                                    }
+                                }
+                            }
+                            Row {
+                                title: "Corners";
+                                Select {
+                                    options: ["Sharp", "Rounded", "Round"];
+                                    value: root.corners;
+                                    selected(value) => {
+                                        root.set("corners", value);
+                                    }
+                                }
+                            }
+                            Row {
+                                title: "Thumbnail size";
+                                last: true;
+                                Select {
+                                    options: ["Small", "Medium", "Large"];
+                                    value: root.thumbnail-size;
+                                    selected(value) => {
+                                        root.set("thumbnail-size", value);
+                                    }
+                                }
+                            }
+                        }
 
                         SectionTitle {
                             text: "Pages";
