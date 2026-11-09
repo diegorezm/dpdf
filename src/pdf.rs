@@ -200,6 +200,10 @@ struct OpenDoc<'a> {
     doc: PdfDocument<'a>,
     page_sizes: Vec<(f32, f32)>,
     outline: Vec<OutlineItem>,
+    /// Each page's text, squashed (see `squash`), once a search has read
+    /// it. Later searches skip pages that can't match without asking
+    /// PDFium. A few KB per page.
+    texts: Vec<Option<String>>,
 }
 
 fn modified(path: &Path) -> Option<std::time::SystemTime> {
@@ -211,10 +215,65 @@ const MAX_SELECT_PAGES: usize = 50;
 /// Pages whose character boxes are kept while dragging.
 const CHAR_CACHE_PAGES: usize = 8;
 
+/// A search in progress, or the last one, kept to narrow the next.
 struct SearchJob {
     id: u64,
     query: String,
-    next_page: usize,
+    /// Pages to search, ascending.
+    pages: Vec<usize>,
+    /// Index into `pages` of the next page to search.
+    next: usize,
+    /// Pages searched so far that had matches.
+    hits: Vec<usize>,
+}
+
+impl SearchJob {
+    /// A search of all `page_count` pages, or, when `query` refines the
+    /// `previous` one (typing more letters), only of the pages that query
+    /// matched plus those it had not reached yet.
+    fn new(id: u64, query: String, page_count: usize, previous: Option<SearchJob>) -> Self {
+        let pages = match previous {
+            Some(prev) if refines(&prev.query, &query) => {
+                let mut pages = prev.hits;
+                pages.extend_from_slice(prev.pages.get(prev.next..).unwrap_or_default());
+                pages
+            }
+            _ => (0..page_count).collect(),
+        };
+        Self {
+            id,
+            query,
+            pages,
+            next: 0,
+            hits: Vec::new(),
+        }
+    }
+
+    fn next_page(&mut self) -> Option<usize> {
+        let page = self.pages.get(self.next).copied();
+        self.next += 1;
+        page
+    }
+
+    fn is_done(&self) -> bool {
+        self.next >= self.pages.len()
+    }
+}
+
+/// Lowercase letters and digits only. If PDFium finds a query in a page,
+/// the squashed query is in the squashed page text, whatever spaces,
+/// hyphens, or line breaks PDFium matched across.
+fn squash(text: &str) -> String {
+    text.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// Whether every match of `new` contains a match of `old`, so pages
+/// without `old` can't have `new` either. Search is case-insensitive.
+fn refines(old: &str, new: &str) -> bool {
+    !old.is_empty() && new.to_lowercase().contains(&old.to_lowercase())
 }
 
 fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
@@ -230,6 +289,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
     let mut renders = Queue::default();
     let mut thumbs = Queue::default();
     let mut search: Option<SearchJob> = None;
+    let mut last_search: Option<SearchJob> = None;
     let mut select: Option<SelectJob> = None;
     // Character boxes of recently selected pages, reused while dragging.
     let mut char_cache: VecDeque<(usize, Vec<CharBox>)> = VecDeque::new();
@@ -266,6 +326,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 renders = Queue::default();
                 thumbs = Queue::default();
                 search = None;
+                last_search = None;
                 select = None;
                 link = None;
                 char_cache.clear();
@@ -297,6 +358,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                             path: path.clone(),
                             modified: stamp,
                             doc,
+                            texts: vec![None; page_sizes.len()],
                             page_sizes: page_sizes.clone(),
                             outline: outline.clone(),
                         });
@@ -351,19 +413,18 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 continue;
             }
             Some(Request::Search { id, query }) => {
-                search = (!query.is_empty()).then_some(SearchJob {
-                    id,
-                    query,
-                    next_page: 0,
-                });
+                let previous = search.take().or(last_search.take());
+                let count = documents.front().map_or(0, |d| d.page_sizes.len());
+                search = (!query.is_empty()).then(|| SearchJob::new(id, query, count, previous));
                 continue;
             }
             None => {}
         }
 
-        let Some(doc) = documents.front().map(|d| &d.doc) else {
+        let Some(OpenDoc { doc, texts, .. }) = documents.front_mut() else {
             continue;
         };
+        let doc = &*doc;
 
         if let Some((page, point)) = link.take() {
             let target = link_at(doc, page, point);
@@ -405,20 +466,22 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 ))),
             }
         } else if let Some(job) = &mut search {
-            let page = job.next_page;
-            job.next_page += 1;
-            if let Ok(matches) = search_page(doc, page, &job.query) {
-                if !matches.is_empty() {
-                    on_event(Event::SearchHits {
-                        id: job.id,
-                        page,
-                        matches,
-                    });
+            if let Some(page) = job.next_page() {
+                let text = texts.get_mut(page);
+                if let Ok(matches) = search_page(doc, page, &job.query, text) {
+                    if !matches.is_empty() {
+                        job.hits.push(page);
+                        on_event(Event::SearchHits {
+                            id: job.id,
+                            page,
+                            matches,
+                        });
+                    }
                 }
             }
-            if job.next_page >= page_count(doc) {
+            if job.is_done() {
                 on_event(Event::SearchDone { id: job.id });
-                search = None;
+                last_search = search.take();
             }
         } else if let Some(page) = thumbs.pages.pop_front() {
             let width_px = thumbs.width_px;
@@ -844,14 +907,25 @@ fn nearest_char(chars: &[CharBox], (x, y): (f32, f32)) -> Option<usize> {
 
 /// Case-insensitive search of one page. Each match is one or more rects,
 /// since a match can wrap across lines.
+/// `cached` is the page's squashed text: when known, pages without the
+/// query are skipped without loading them; when unknown, it is filled in.
 fn search_page(
     doc: &PdfDocument,
     page: usize,
     query: &str,
+    cached: Option<&mut Option<String>>,
 ) -> Result<Vec<Vec<NormRect>>, PdfiumError> {
+    if let Some(Some(text)) = cached.as_deref() {
+        if !text.contains(&squash(query)) {
+            return Ok(Vec::new());
+        }
+    }
     let pdf_page = load_page(doc, page)?;
     let size = (pdf_page.width().value, pdf_page.height().value);
     let text = pdf_page.text()?;
+    if let Some(slot @ None) = cached {
+        *slot = Some(squash(&text.all()));
+    }
     let search = text.search(query, &PdfSearchOptions::new())?;
     let matches = search
         .iter(PdfSearchDirection::SearchForward)
@@ -1010,6 +1084,23 @@ mod tests {
     }
 
     #[test]
+    fn refined_search_skips_pages_without_the_shorter_query() {
+        let mut first = SearchJob::new(1, "Foo".into(), 10, None);
+        assert_eq!(first.pages, (0..10).collect::<Vec<_>>());
+        // Stopped after page 5, with matches on 2 and 4.
+        while first.next < 6 {
+            first.next_page();
+        }
+        first.hits = vec![2, 4];
+        let narrowed = SearchJob::new(2, "foobar".into(), 10, Some(first));
+        assert_eq!(narrowed.pages, [2, 4, 6, 7, 8, 9]);
+        let other = SearchJob::new(3, "baz".into(), 10, Some(narrowed));
+        assert_eq!(other.pages.len(), 10);
+        assert!(!refines("", "a"));
+        assert_eq!(squash("Hol-\r\nmes, É"), "holmesé");
+    }
+
+    #[test]
     fn huge_renders_are_capped() {
         assert_eq!(capped_width(1600, (595.0, 842.0)), 1600);
         let w = capped_width(100_000, (595.0, 842.0));
@@ -1067,9 +1158,32 @@ mod tests {
         println!("invert 1600 px: {:.2} ms", ms(t));
         let t = Instant::now();
         for page in 0..sizes.len() {
-            search_page(&doc, page, "holmes").unwrap();
+            search_page(&doc, page, "holmes", None).unwrap();
         }
         println!("search all pages: {:.0} ms", ms(t));
+        // Typing "holmes" letter by letter, each search narrowing the last.
+        let t = Instant::now();
+        let mut last: Option<SearchJob> = None;
+        let mut texts = vec![None; sizes.len()];
+        for end in 1..="holmes".len() {
+            let mut job = SearchJob::new(0, "holmes"[..end].into(), sizes.len(), last.take());
+            while let Some(page) = job.next_page() {
+                let text = texts.get_mut(page);
+                if !search_page(&doc, page, &job.query, text)
+                    .unwrap()
+                    .is_empty()
+                {
+                    job.hits.push(page);
+                }
+            }
+            last = Some(job);
+        }
+        println!("typed search, 6 queries: {:.0} ms", ms(t));
+        let t = Instant::now();
+        for page in 0..sizes.len() {
+            search_page(&doc, page, "watson", texts.get_mut(page)).unwrap();
+        }
+        println!("search again, text cached: {:.0} ms", ms(t));
         let t = Instant::now();
         for page in 0..sizes.len() {
             let _ = load_page(&doc, page).map(|p| p.label().map(str::to_owned));
@@ -1094,7 +1208,7 @@ mod tests {
         assert_eq!(bitmap.rgba.len(), 100 * 150 * 4);
         assert!(render(&doc, 5, 100, false, true).is_err());
         assert_eq!(
-            search_page(&doc, 0, "anything").unwrap(),
+            search_page(&doc, 0, "anything", None).unwrap(),
             Vec::<Vec<_>>::new()
         );
     }
