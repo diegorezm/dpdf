@@ -1451,7 +1451,12 @@ impl Viewer {
         // Snap to physical pixels so a 1:1 render isn't resampled into blur.
         let snap = |v: f32| (v * scale).round() / scale;
         let rect = self.layout.rect(page)?;
-        let image = self.cache.get(page).cloned();
+        // Until the page renders, its thumbnail, stretched, beats a blank.
+        let image = self
+            .cache
+            .get(page)
+            .or_else(|| self.thumb_cache.get(&page))
+            .cloned();
         Some(PageView {
             x: snap(rect.x),
             y: snap(rect.y),
@@ -1536,8 +1541,16 @@ impl Viewer {
             .chain(preload.filter(|p| !visible.contains(p)))
             .filter(|&p| self.cache.width(p) != Some(width_px))
             .collect();
+        // Visible pages with nothing to show yet get a quick preview first.
+        let previews = visible
+            .filter(|&p| !self.cache.contains(p) && !self.thumb_cache.contains_key(&p))
+            .collect();
         self.last_request = Some(key);
-        self.worker.send(Request::Render { pages, width_px });
+        self.worker.send(Request::Render {
+            previews,
+            pages,
+            width_px,
+        });
     }
 }
 

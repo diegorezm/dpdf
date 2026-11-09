@@ -18,8 +18,13 @@ pub enum Request {
         path: PathBuf,
         password: Option<String>,
     },
-    /// Replaces the render queue: render `pages`, in order, `width_px` wide.
-    Render { pages: Vec<usize>, width_px: u32 },
+    /// Replaces the render queue: render `previews` quickly at a quarter
+    /// of `width_px`, then `pages`, in order, `width_px` wide.
+    Render {
+        previews: Vec<usize>,
+        pages: Vec<usize>,
+        width_px: u32,
+    },
     /// Replaces the thumbnail queue. Thumbnails run after renders and search.
     Thumbnails { pages: Vec<usize>, width_px: u32 },
     /// Starts a search over all pages, replacing any running one. An empty
@@ -182,9 +187,14 @@ impl Worker {
 
 #[derive(Default)]
 struct Queue {
+    /// Pages to render rough and small first, so they show at once.
+    previews: VecDeque<usize>,
     pages: VecDeque<usize>,
     width_px: u32,
 }
+
+/// Previews are this many times narrower than the full render.
+const PREVIEW_DIVISOR: u32 = 4;
 
 /// A pending selection: drag start and end, as pages and points.
 type SelectJob = ((usize, (f32, f32)), (usize, (f32, f32)));
@@ -307,6 +317,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
     loop {
         let idle = documents.is_empty()
             || (renders.pages.is_empty()
+                && renders.previews.is_empty()
                 && thumbs.pages.is_empty()
                 && search.is_none()
                 && select.is_none()
@@ -387,8 +398,13 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 }
                 continue;
             }
-            Some(Request::Render { pages, width_px }) => {
+            Some(Request::Render {
+                previews,
+                pages,
+                width_px,
+            }) => {
                 renders = Queue {
+                    previews: previews.into(),
                     pages: pages.into(),
                     width_px,
                 };
@@ -396,6 +412,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
             }
             Some(Request::Thumbnails { pages, width_px }) => {
                 thumbs = Queue {
+                    previews: VecDeque::new(),
                     pages: pages.into(),
                     width_px,
                 };
@@ -468,6 +485,16 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
             on_event(Event::Selection(number_lines(parts, |page| {
                 cached_chars(doc, &mut char_cache, page)
             })));
+        } else if let Some(page) = renders.previews.pop_front() {
+            let width_px = (renders.width_px / PREVIEW_DIVISOR).max(1);
+            // The full render follows; a failed preview needs no message.
+            if let Ok(bitmap) = render(doc, page, width_px, inverted, false) {
+                on_event(Event::Rendered {
+                    page,
+                    width_px,
+                    bitmap,
+                });
+            }
         } else if let Some(page) = renders.pages.pop_front() {
             let width_px = renders.width_px;
             match render(doc, page, width_px, inverted, true) {
