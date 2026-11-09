@@ -223,5 +223,5 @@ A change is done when:
 - [ ] `cargo test` passes; new logic has tests.
 - [ ] No `unwrap`/`expect` in production paths; no UI-thread blocking.
 - [ ] New user-facing actions have keyboard shortcuts.
-- [ ] Docs (README / AGENTS.md) updated if behavior, setup, or principles changed.
+- [ ] Docs (README / DOCS.md / AGENTS.md) updated if behavior, setup, or principles changed.
 - [ ] Committed in logical conventional commits with no artifacts or secrets.

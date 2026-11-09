@@ -17,18 +17,18 @@
     <a href="https://github.com/diegorezm/dpdf">GitHub</a>
   </nav>
   <article id="doc"><p>Loading…</p></article>
-  <footer>Generated from the project's <a href="https://github.com/diegorezm/dpdf/blob/main/README.md">README</a>.</footer>
+  <footer>Generated from the project's <a href="https://github.com/diegorezm/dpdf/blob/main/DOCS.md">DOCS.md</a>.</footer>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
 <script>
-  // The docs are the README, copied next to this page at deploy time.
+  // The docs are DOCS.md, copied next to this page at deploy time.
   const repo = "https://github.com/diegorezm/dpdf/blob/main/";
   const doc = document.getElementById("doc");
-  fetch("README.md")
+  fetch("DOCS.md")
     .then((r) => r.text())
     .then((md) => {
-      doc.innerHTML = marked.parse(md.replace(/^<img[^>]*>\s*/, ""));
-      // README links are relative to the repo, not to this site.
+      doc.innerHTML = marked.parse(md);
+      // Links in DOCS.md are relative to the repo, not to this site.
       for (const a of doc.querySelectorAll("a[href]")) {
         const href = a.getAttribute("href");
         if (!/^(https?:|#)/.test(href)) a.href = repo + href;
@@ -38,7 +38,7 @@
       }
     })
     .catch(() => {
-      doc.innerHTML = `<p>Could not load the docs. Read them <a href="${repo}README.md">on GitHub</a>.</p>`;
+      doc.innerHTML = `<p>Could not load the docs. Read them <a href="${repo}DOCS.md">on GitHub</a>.</p>`;
     });
 </script>
 </body>

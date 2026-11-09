@@ -3,7 +3,7 @@ name: pages
 on:
   push:
     branches: [main]
-    paths: [site/**, README.md, assets/icon.svg, .github/workflows/pages.yml]
+    paths: [site/**, DOCS.md, assets/icon.svg, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
       - name: Assemble site
         run: |
           cp -r site _site
-          cp README.md assets/icon.svg _site/
+          cp DOCS.md assets/icon.svg _site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
