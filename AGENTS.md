@@ -116,6 +116,7 @@ Core defaults: `Ctrl+O` open, `Ctrl+K` palette, `Ctrl+F` search, `Ctrl+P` go to 
 - No polling loops, no background work while idle.
 - Targets (guidelines, measure before claiming): cold start to window < 300 ms; idle RSS with no document < 50 MB; release binary stays small (`lto`, `strip`, `opt-level`).
 - Any change touching rendering, caching, or scrolling should state its performance impact in the commit/PR. Prefer `perf:` commits with before/after numbers.
+- Measure with the ignored benchmark test (open, render, invert, search, labels): `DPDF_BENCH_PDF=<file.pdf> cargo test --release bench_document -- --ignored --nocapture`.
 
 ## 10. Architecture
 
