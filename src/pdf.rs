@@ -200,6 +200,10 @@ struct OpenDoc<'a> {
     doc: PdfDocument<'a>,
     page_sizes: Vec<(f32, f32)>,
     outline: Vec<OutlineItem>,
+    /// Kept in memory only, to read page labels.
+    password: Option<String>,
+    /// Page labels, once read.
+    labels: Option<Vec<String>>,
     /// Each page's text, squashed (see `squash`), once a search has read
     /// it. Later searches skip pages that can't match without asking
     /// PDFium. A few KB per page.
@@ -294,8 +298,8 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
     // Character boxes of recently selected pages, reused while dragging.
     let mut char_cache: VecDeque<(usize, Vec<CharBox>)> = VecDeque::new();
     let mut inverted = false;
-    // Labels collected so far, while some pages remain.
-    let mut labels: Option<Vec<String>> = None;
+    // Whether the live document's page labels are still to be sent.
+    let mut labels_due = false;
     let mut link: Option<(usize, (f32, f32))> = None;
     let mut select_line: Option<(usize, (f32, f32))> = None;
 
@@ -307,7 +311,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 && select.is_none()
                 && select_line.is_none()
                 && link.is_none()
-                && labels.is_none());
+                && !labels_due);
         let request = if idle {
             match rx.recv() {
                 Ok(request) => Some(request),
@@ -330,7 +334,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 select = None;
                 link = None;
                 char_cache.clear();
-                labels = None;
+                labels_due = false;
                 let stamp = modified(&path);
                 if let Some(i) = documents.iter().position(|d| d.path == path) {
                     match documents.remove(i) {
@@ -340,7 +344,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 }
                 if documents.front().is_some_and(|d| d.path == path) {
                     if let Some(open) = documents.front() {
-                        labels = Some(Vec::with_capacity(open.page_sizes.len()));
+                        labels_due = true;
                         on_event(Event::Opened {
                             title: file_title(&path),
                             path,
@@ -353,9 +357,11 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 match open(&pdfium, &path, password.as_deref()) {
                     Ok((doc, page_sizes)) => {
                         let outline = outline(&doc);
-                        labels = Some(Vec::with_capacity(page_sizes.len()));
+                        labels_due = true;
                         documents.push_front(OpenDoc {
                             path: path.clone(),
+                            password: password.clone(),
+                            labels: None,
                             modified: stamp,
                             doc,
                             texts: vec![None; page_sizes.len()],
@@ -421,7 +427,16 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
             None => {}
         }
 
-        let Some(OpenDoc { doc, texts, .. }) = documents.front_mut() else {
+        let Some(OpenDoc {
+            doc,
+            texts,
+            labels,
+            path,
+            password,
+            page_sizes,
+            ..
+        }) = documents.front_mut()
+        else {
             continue;
         };
         let doc = &*doc;
@@ -489,18 +504,14 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
             if let Ok(bitmap) = render(doc, page, width_px, inverted, false) {
                 on_event(Event::Thumbnail { page, bitmap });
             }
-        } else if let Some(found) = &mut labels {
-            let page = found.len();
-            let label = load_page(doc, page)
-                .ok()
-                .and_then(|p| p.label().map(str::to_owned))
-                .unwrap_or_default();
-            found.push(label);
-            if found.len() >= page_count(doc) {
-                // Most documents have no labels; don't bother the UI then.
-                if let Some(found) = labels.take().filter(|l| l.iter().any(|s| !s.is_empty())) {
-                    on_event(Event::Labels(found));
-                }
+        } else if labels_due {
+            labels_due = false;
+            let found = labels.get_or_insert_with(|| {
+                page_labels(&pdfium, path, password.as_deref(), page_sizes.len())
+            });
+            // Most documents have no labels; don't bother the UI then.
+            if found.iter().any(|s| !s.is_empty()) {
+                on_event(Event::Labels(found.clone()));
             }
         }
     }
@@ -601,8 +612,55 @@ fn safe_uri(uri: &str) -> bool {
         && !uri.chars().any(|c| c.is_control() || c == '"')
 }
 
-fn page_count(doc: &PdfDocument) -> usize {
-    usize::try_from(doc.pages().len()).unwrap_or(0)
+/// Page labels (e.g. "iv"), one per page, empty when a page has none.
+/// Read from a second handle on the document through the raw bindings:
+/// `PdfPage::label` would load and parse every page (300 ms for 1000
+/// pages), while the label tree lookup alone takes about a millisecond.
+fn page_labels(pdfium: &Pdfium, path: &Path, password: Option<&str>, count: usize) -> Vec<String> {
+    let Some(path) = path.to_str() else {
+        return Vec::new();
+    };
+    let bindings = pdfium.bindings();
+    // SAFETY: the handle is checked for null, used only within this block,
+    // and closed exactly once. Each buffer passed to FPDF_GetPageLabel is
+    // as long as the length PDFium just reported for that label.
+    unsafe {
+        let handle = bindings.FPDF_LoadDocument(path, password);
+        if handle.is_null() {
+            return Vec::new();
+        }
+        let labels = (0..count)
+            .map(|page| {
+                let Ok(index) = i32::try_from(page) else {
+                    return String::new();
+                };
+                let len = bindings.FPDF_GetPageLabel(handle, index, std::ptr::null_mut(), 0);
+                let Ok(size) = usize::try_from(len) else {
+                    return String::new();
+                };
+                if size <= 2 {
+                    return String::new();
+                }
+                let mut buffer = vec![0u8; size];
+                bindings.FPDF_GetPageLabel(handle, index, buffer.as_mut_ptr().cast(), len);
+                utf16le(&buffer)
+            })
+            .collect();
+        bindings.FPDF_CloseDocument(handle);
+        labels
+    }
+}
+
+/// Decodes NUL-terminated UTF-16LE.
+fn utf16le(bytes: &[u8]) -> String {
+    let units: Vec<u16> = bytes
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&pair| u16::from_le_bytes(pair))
+        .take_while(|&unit| unit != 0)
+        .collect();
+    String::from_utf16_lossy(&units)
 }
 
 fn load_page<'a>(doc: &'a PdfDocument, page: usize) -> Result<PdfPage<'a>, PdfiumError> {
@@ -1097,6 +1155,7 @@ mod tests {
         let other = SearchJob::new(3, "baz".into(), 10, Some(narrowed));
         assert_eq!(other.pages.len(), 10);
         assert!(!refines("", "a"));
+        assert_eq!(utf16le(&[b'i', 0, b'v', 0, 0, 0]), "iv");
         assert_eq!(squash("Hol-\r\nmes, É"), "holmesé");
     }
 
@@ -1185,10 +1244,14 @@ mod tests {
         }
         println!("search again, text cached: {:.0} ms", ms(t));
         let t = Instant::now();
-        for page in 0..sizes.len() {
-            let _ = load_page(&doc, page).map(|p| p.label().map(str::to_owned));
+        let labels = page_labels(&pdfium, Path::new(&path), None, sizes.len());
+        println!("page labels: {:.1} ms", ms(t));
+        for (page, label) in labels.iter().enumerate().step_by(97) {
+            let slow = load_page(&doc, page)
+                .ok()
+                .and_then(|p| p.label().map(str::to_owned));
+            assert_eq!(*label, slow.unwrap_or_default());
         }
-        println!("page labels: {:.0} ms", ms(t));
     }
 
     /// Needs PDFium; skipped when the library can't be loaded.
@@ -1201,6 +1264,7 @@ mod tests {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/two-pages.pdf");
         let (doc, sizes) = open(&pdfium, &path, None).unwrap();
         assert!(outline(&doc).is_empty());
+        assert_eq!(page_labels(&pdfium, &path, None, 2), vec![String::new(); 2]);
         assert_eq!(link_at(&doc, 0, (0.5, 0.5)), None);
         assert_eq!(sizes, vec![(200.0, 300.0); 2]);
         let bitmap = render(&doc, 1, 100, false, true).unwrap();
