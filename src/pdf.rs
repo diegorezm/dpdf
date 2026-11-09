@@ -24,11 +24,11 @@ pub enum Request {
     /// Starts a search over all pages, replacing any running one. An empty
     /// query just cancels.
     Search { id: u64, query: String },
-    /// Selects the text between two points on a page (page fractions).
+    /// Selects the text between two points, each a page and a point in
+    /// page fractions. The points may be on different pages.
     Select {
-        page: usize,
-        from: (f32, f32),
-        to: (f32, f32),
+        from: (usize, (f32, f32)),
+        to: (usize, (f32, f32)),
     },
     /// Invert page colors in future renders (dark reading).
     SetInverted(bool),
@@ -86,13 +86,18 @@ pub enum Event {
     SearchDone {
         id: u64,
     },
-    /// Result of a `Select`; empty `rects` when nothing was selected.
-    Selection {
-        page: usize,
-        rects: Vec<NormRect>,
-        text: String,
-    },
+    /// Result of a `Select`, one part per page; empty when nothing was
+    /// selected.
+    Selection(Vec<SelectionPart>),
     Error(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SelectionPart {
+    pub page: usize,
+    /// One rect per line.
+    pub rects: Vec<NormRect>,
+    pub text: String,
 }
 
 pub struct Bitmap {
@@ -135,8 +140,13 @@ struct Queue {
     width_px: u32,
 }
 
-/// A pending selection: page, drag start, drag end.
-type SelectJob = (usize, (f32, f32), (f32, f32));
+/// A pending selection: drag start and end, as pages and points.
+type SelectJob = ((usize, (f32, f32)), (usize, (f32, f32)));
+
+/// Pages a selection may span; bounds the work of a wild drag.
+const MAX_SELECT_PAGES: usize = 50;
+/// Pages whose character boxes are kept while dragging.
+const CHAR_CACHE_PAGES: usize = 8;
 
 struct SearchJob {
     id: u64,
@@ -157,8 +167,8 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
     let mut thumbs = Queue::default();
     let mut search: Option<SearchJob> = None;
     let mut select: Option<SelectJob> = None;
-    // Character boxes of the last page selected on, reused while dragging.
-    let mut char_cache: Option<(usize, Vec<CharBox>)> = None;
+    // Character boxes of recently selected pages, reused while dragging.
+    let mut char_cache: VecDeque<(usize, Vec<CharBox>)> = VecDeque::new();
     let mut inverted = false;
     // Labels collected so far, while some pages remain.
     let mut labels: Option<Vec<String>> = None;
@@ -192,7 +202,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 search = None;
                 select = None;
                 link = None;
-                char_cache = None;
+                char_cache.clear();
                 labels = None;
                 match open(&pdfium, &path, password.as_deref()) {
                     Ok((doc, page_sizes)) => {
@@ -230,8 +240,8 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 };
                 continue;
             }
-            Some(Request::Select { page, from, to }) => {
-                select = Some((page, from, to));
+            Some(Request::Select { from, to }) => {
+                select = Some((from, to));
                 continue;
             }
             Some(Request::LinkAt { page, point }) => {
@@ -258,15 +268,20 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
         if let Some((page, point)) = link.take() {
             let target = link_at(doc, page, point);
             on_event(Event::Link(target));
-        } else if let Some((page, from, to)) = select.take() {
-            if char_cache.as_ref().map(|(p, _)| *p) != Some(page) {
-                char_cache = char_boxes(doc, page).ok().map(|boxes| (page, boxes));
-            }
-            let (rects, text) = char_cache
-                .as_ref()
-                .and_then(|(_, boxes)| select_text(boxes, from, to))
-                .unwrap_or_default();
-            on_event(Event::Selection { page, rects, text });
+        } else if let Some((from, to)) = select.take() {
+            let parts = select_pages(from, to, |page| {
+                if !char_cache.iter().any(|(p, _)| *p == page) {
+                    let boxes = char_boxes(doc, page).unwrap_or_default();
+                    char_cache.push_front((page, boxes));
+                    char_cache.truncate(CHAR_CACHE_PAGES);
+                }
+                char_cache
+                    .iter()
+                    .find(|(p, _)| *p == page)
+                    .map(|(_, boxes)| boxes.clone())
+                    .unwrap_or_default()
+            });
+            on_event(Event::Selection(parts));
         } else if let Some(page) = renders.pages.pop_front() {
             let width_px = renders.width_px;
             match render(doc, page, width_px, inverted) {
@@ -485,6 +500,49 @@ fn char_boxes(doc: &PdfDocument, page: usize) -> Result<Vec<CharBox>, PdfiumErro
     Ok(boxes)
 }
 
+/// Selects text from one page point to another, possibly pages apart.
+/// `chars` gives a page's character boxes.
+fn select_pages(
+    from: (usize, (f32, f32)),
+    to: (usize, (f32, f32)),
+    mut chars: impl FnMut(usize) -> Vec<CharBox>,
+) -> Vec<SelectionPart> {
+    if from.0 == to.0 {
+        let boxes = chars(from.0);
+        return select_text(&boxes, from.1, to.1)
+            .map(|(rects, text)| SelectionPart {
+                page: from.0,
+                rects,
+                text,
+            })
+            .into_iter()
+            .collect();
+    }
+    let (start, end) = if from.0 < to.0 {
+        (from, to)
+    } else {
+        (to, from)
+    };
+    let last = end.0.min(start.0 + MAX_SELECT_PAGES - 1);
+    (start.0..=last)
+        .filter_map(|page| {
+            let boxes = chars(page);
+            let a = if page == start.0 {
+                nearest_char(&boxes, start.1)?
+            } else {
+                0
+            };
+            let b = if page == end.0 {
+                nearest_char(&boxes, end.1)?
+            } else {
+                boxes.len().checked_sub(1)?
+            };
+            let (rects, text) = select_range(&boxes, a, b)?;
+            Some(SelectionPart { page, rects, text })
+        })
+        .collect()
+}
+
 /// Selects the characters between the ones nearest `from` and `to`.
 /// Returns one rect per line and the selected text.
 fn select_text(
@@ -494,7 +552,11 @@ fn select_text(
 ) -> Option<(Vec<NormRect>, String)> {
     let a = nearest_char(chars, from)?;
     let b = nearest_char(chars, to)?;
-    let range = &chars[a.min(b)..=a.max(b)];
+    select_range(chars, a, b)
+}
+
+fn select_range(chars: &[CharBox], a: usize, b: usize) -> Option<(Vec<NormRect>, String)> {
+    let range = chars.get(a.min(b)..=a.max(b))?;
 
     let mut rects: Vec<NormRect> = Vec::new();
     for ch in range
@@ -654,6 +716,22 @@ mod tests {
         assert!(!safe_uri("javascript:alert(1)"));
         assert!(!safe_uri(" https://x.com"));
         assert!(!safe_uri("https://x\n.com"));
+    }
+
+    #[test]
+    fn selects_across_pages() {
+        let pages = [
+            boxes("first page", 0.1),
+            boxes("middle", 0.1),
+            boxes("last page", 0.1),
+        ];
+        let chars = |page: usize| pages[page].clone();
+        // From "page" on page 0 to "last" on page 2, dragged backwards.
+        let parts = select_pages((2, (0.165, 0.11)), (0, (0.225, 0.11)), chars);
+        let text: Vec<&str> = parts.iter().map(|p| p.text.as_str()).collect();
+        assert_eq!(text, ["page", "middle", "last"]);
+        assert_eq!(parts.iter().map(|p| p.page).collect::<Vec<_>>(), [0, 1, 2]);
+        assert!(select_pages((0, (0.0, 0.0)), (1, (0.0, 0.0)), |_| Vec::new()).is_empty());
     }
 
     #[test]

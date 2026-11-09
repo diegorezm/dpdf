@@ -827,9 +827,7 @@ impl App {
                 self.viewer.search_hits(window, id, page, matches)
             }
             Event::SearchDone { id } => self.viewer.search_done(window, id),
-            Event::Selection { page, rects, text } => {
-                self.viewer.selected(window, page, rects, text)
-            }
+            Event::Selection(parts) => self.viewer.selected(window, parts),
             Event::Error(message) => {
                 if let Some(path) = self.viewer.open_failed(window, message) {
                     if let Some(index) = self.tabs.iter().position(|t| *t == path) {

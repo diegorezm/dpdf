@@ -14,7 +14,7 @@ use crate::config::{parse_color, DefaultZoom};
 use crate::keymap::Action;
 use crate::layout::{self, Layout, Zoom};
 use crate::nav;
-use crate::pdf::{Bitmap, LinkTarget, NormRect, OutlineItem, Request, Worker};
+use crate::pdf::{Bitmap, LinkTarget, NormRect, OutlineItem, Request, SelectionPart, Worker};
 use crate::search::SearchState;
 use crate::store::{Recent, Store};
 use crate::{AppWindow, Highlight, Mark, PageView, RecentItem, SideItem, ThumbView};
@@ -33,10 +33,16 @@ const SCROLL_STEP: f32 = 60.0;
 /// Pointer travel before a press becomes a drag.
 const DRAG_THRESHOLD: f32 = 4.0;
 
+/// The selected text, one part per page.
 struct Selection {
-    page: usize,
-    rects: Vec<NormRect>,
-    text: String,
+    parts: Vec<SelectionPart>,
+}
+
+impl Selection {
+    fn text(&self) -> String {
+        let texts: Vec<&str> = self.parts.iter().map(|p| p.text.as_str()).collect();
+        texts.join("\n")
+    }
 }
 
 struct Drag {
@@ -922,19 +928,18 @@ impl Viewer {
                     return;
                 }
                 drag.dragging = true;
-                let (page, from) = (drag.page, drag.from);
-                let to = self.point_on_page(window, page, x, y);
-                self.worker.send(Request::Select { page, from, to });
+                let from = (drag.page, drag.from);
+                let to = self.page_point_clamped(window, x, y);
+                self.worker.send(Request::Select { from, to });
             }
             "up" => {
                 let Some(drag) = self.drag.take() else {
                     return;
                 };
                 if drag.dragging {
-                    let to = self.point_on_page(window, drag.page, x, y);
+                    let to = self.page_point_clamped(window, x, y);
                     self.worker.send(Request::Select {
-                        page: drag.page,
-                        from: drag.from,
+                        from: (drag.page, drag.from),
                         to,
                     });
                     if self.selection.is_some() {
@@ -960,14 +965,8 @@ impl Viewer {
         }
     }
 
-    pub fn selected(
-        &mut self,
-        window: &AppWindow,
-        page: usize,
-        rects: Vec<NormRect>,
-        text: String,
-    ) {
-        self.selection = (!rects.is_empty()).then_some(Selection { page, rects, text });
+    pub fn selected(&mut self, window: &AppWindow, parts: Vec<SelectionPart>) {
+        self.selection = (!parts.is_empty()).then_some(Selection { parts });
         // The final selection of a finished drag shows the toolbar.
         if self.drag.is_none() && self.selection.is_some() {
             self.popup = Popup::Selection;
@@ -1065,14 +1064,16 @@ impl Viewer {
     fn annotate(&mut self, kind: Kind, color: &str) -> Option<u64> {
         let selection = self.selection.take()?;
         self.history.record(&self.annotations.items);
-        Some(self.annotations.add(
-            selection.page,
-            kind,
-            color,
-            selection.text,
-            selection.rects,
-            annotations::now(),
-        ))
+        // One annotation per page; a single undo step removes them all.
+        let now = annotations::now();
+        selection
+            .parts
+            .into_iter()
+            .map(|part| {
+                self.annotations
+                    .add(part.page, kind, color, part.text, part.rects, now)
+            })
+            .reduce(|first, _| first)
     }
 
     fn edit_note(&mut self, id: u64) -> PopupOutcome {
@@ -1088,7 +1089,7 @@ impl Viewer {
     }
 
     fn copy(&mut self) -> PopupOutcome {
-        let text = self.selection.as_ref().map(|s| s.text.clone());
+        let text = self.selection.as_ref().map(Selection::text);
         self.selection = None;
         text.map_or(PopupOutcome::Nothing, |t| copy_text(&t))
     }
@@ -1169,16 +1170,21 @@ impl Viewer {
         })
     }
 
-    /// A reader point in fractions of `page`, clamped to the page.
-    fn point_on_page(&self, window: &AppWindow, page: usize, x: f32, y: f32) -> (f32, f32) {
-        let Some(rect) = self.layout.rect(page) else {
-            return (0.0, 0.0);
-        };
+    /// The page under a reader point (or nearest it) and the point in
+    /// fractions of that page, clamped to the page.
+    fn page_point_clamped(&self, window: &AppWindow, x: f32, y: f32) -> (usize, (f32, f32)) {
         let cx = x - window.get_viewport_x();
         let cy = y - window.get_viewport_y();
+        let page = self.layout.visible(cy, 0.01).start;
+        let Some(rect) = self.layout.rect(page) else {
+            return (page, (0.0, 0.0));
+        };
         (
-            ((cx - rect.x) / rect.width).clamp(0.0, 1.0),
-            ((cy - rect.y) / rect.height).clamp(0.0, 1.0),
+            page,
+            (
+                ((cx - rect.x) / rect.width).clamp(0.0, 1.0),
+                ((cy - rect.y) / rect.height).clamp(0.0, 1.0),
+            ),
         )
     }
 
@@ -1189,7 +1195,8 @@ impl Viewer {
             Popup::Selection => self
                 .selection
                 .as_ref()
-                .and_then(|s| Some((s.page, *s.rects.first()?))),
+                .and_then(|s| s.parts.first())
+                .and_then(|p| Some((p.page, *p.rects.first()?))),
             Popup::Annotation(id) => self
                 .annotations
                 .get(id)
@@ -1308,8 +1315,9 @@ impl Viewer {
                 note: i == last && !a.note.is_empty(),
             }));
         }
-        if let Some(s) = self.selection.as_ref().filter(|s| s.page == page) {
-            items.extend(s.rects.iter().map(|r| Mark {
+        let selected = self.selection.iter().flat_map(|s| &s.parts);
+        if let Some(part) = selected.into_iter().find(|p| p.page == page) {
+            items.extend(part.rects.iter().map(|r| Mark {
                 x: r.x,
                 y: r.y,
                 width: r.width,

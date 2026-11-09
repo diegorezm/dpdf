@@ -40,9 +40,11 @@ export component Sidebar inherits Rectangle {
     if root.mode != "thumbs": Flickable {
         y: tabs.height;
         height: parent.height - tabs.height;
+        content-width: self.width;
         content-height: list.preferred-height;
 
         list := VerticalLayout {
+            width: parent.width;
             padding: 6px;
             alignment: start;
 
@@ -68,6 +70,7 @@ export component Sidebar inherits Rectangle {
                         background: item.color;
                     }
                     VerticalLayout {
+                        horizontal-stretch: 1;
                         Text {
                             text: item.title;
                             color: item.current ? Theme.accent : Theme.text;
