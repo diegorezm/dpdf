@@ -32,6 +32,8 @@ const THUMB_KEEP: usize = 20;
 const RECENT_SHOWN: usize = 8;
 /// Line scroll step, in logical pixels.
 const SCROLL_STEP: f32 = 60.0;
+/// How long a changed reading position may wait before it is saved.
+const SAVE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 /// Pointer travel before a press becomes a drag.
 const DRAG_THRESHOLD: f32 = 4.0;
 
@@ -137,6 +139,8 @@ pub struct Viewer {
     sidebar_width: f32,
     thumbs: Rc<VecModel<ThumbView>>,
     thumb_cache: HashMap<usize, Image>,
+    /// Saves a changed reading position shortly after it changes.
+    save_timer: slint::Timer,
     last_thumb_request: Option<Range<usize>>,
 
     search: Option<SearchState>,
@@ -207,6 +211,7 @@ impl Viewer {
             sidebar_width: 180.0,
             thumbs,
             thumb_cache: HashMap::new(),
+            save_timer: slint::Timer::default(),
             last_thumb_request: None,
             search: None,
             next_search_id: 0,
@@ -400,16 +405,36 @@ impl Viewer {
     }
 
     /// Saves the reading position of the open document.
+    /// Records and saves the reading position now.
     pub fn remember_position(&mut self) {
-        let Some(path) = self.path.clone() else {
+        self.save_timer.stop();
+        if self.record_position() {
+            self.save();
+        }
+    }
+
+    /// Records the reading position and saves it within `SAVE_DELAY`, so
+    /// scrolling through pages writes the file at most once per delay.
+    fn remember_position_soon(&mut self) {
+        if !self.record_position() || self.save_timer.running() {
             return;
+        }
+        self.save_timer
+            .start(slint::TimerMode::SingleShot, SAVE_DELAY, || {
+                crate::with_app(|app| app.viewer().save());
+            });
+    }
+
+    fn record_position(&mut self) -> bool {
+        let Some(path) = self.path.clone() else {
+            return false;
         };
         self.store.remember(Recent {
             path,
             page: self.current_page,
             zoom: self.zoom,
         });
-        self.save();
+        true
     }
 
     pub fn set_default_zoom(&mut self, zoom: DefaultZoom) {
@@ -555,8 +580,9 @@ impl Viewer {
                 self.update_side_items();
             }
             self.reveal_thumb(window, current);
-            // Saved on every page change so the position survives a crash.
-            self.remember_position();
+            // Saved soon after every page change so the position survives
+            // a crash, without writing the file on each page scrolled past.
+            self.remember_position_soon();
         }
         self.cache.retain(|page, _| keep.contains(page));
         if force || self.shown_pages.as_ref() != Some(&preload) {
@@ -700,7 +726,7 @@ impl Viewer {
         if zoom == Zoom::FitPage {
             self.go_to_page(window, page);
         }
-        self.remember_position();
+        self.remember_position_soon();
     }
 
     /// Scale relative to fit width for the current zoom mode.
