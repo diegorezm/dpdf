@@ -1,0 +1,657 @@
+# Brazilian Portuguese for dpdf. Read by Slint (the .slint markup) and
+# by src/i18n.rs (text built in Rust). msgids are the English texts.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: pt_BR\n"
+
+msgid "  ·  custom"
+msgstr "  ·  personalizado"
+
+msgid " · {} matches"
+msgstr " · {} ocorrências"
+
+msgid "+ New session"
+msgstr "+ Nova sessão"
+
+msgid "1 note"
+msgstr "1 nota"
+
+msgid "1 tab"
+msgstr "1 aba"
+
+msgid "A fast, minimal, local-first PDF reader"
+msgstr "Um leitor de PDF rápido, minimalista e local"
+
+msgid "About"
+msgstr "Sobre"
+
+msgid "Add .toml files to the themes folder."
+msgstr "Adicione arquivos .toml à pasta de temas."
+
+msgid "Add note to selection"
+msgstr "Adicionar nota à seleção"
+
+msgid "Any installed font also works in config.toml."
+msgstr "Qualquer fonte instalada também funciona no config.toml."
+
+msgid "App"
+msgstr "Aplicativo"
+
+msgid "Appearance"
+msgstr "Aparência"
+
+msgid "Art. {} not found"
+msgstr "Art. {} não encontrado"
+
+msgid "Before the first section"
+msgstr "Antes da primeira seção"
+
+msgid "Built with Rust, Slint, and PDFium. MIT licensed."
+msgstr "Feito com Rust, Slint e PDFium. Licença MIT."
+
+msgid "Case law"
+msgstr "Jurisprudência"
+
+msgid "Check for updates"
+msgstr "Procurar atualizações"
+
+msgid "Checking for updates…"
+msgstr "Procurando atualizações…"
+
+msgid "Close"
+msgstr "Fechar"
+
+msgid "Close overlay / clear selection"
+msgstr "Fechar painel / limpar seleção"
+
+msgid "Close tab"
+msgstr "Fechar aba"
+
+msgid "Comfortable"
+msgstr "Confortável"
+
+msgid "Command palette"
+msgstr "Paleta de comandos"
+
+msgid "Compact"
+msgstr "Compacta"
+
+msgid "Config reloaded"
+msgstr "Configuração recarregada"
+
+msgid "Configuration files"
+msgstr "Arquivos de configuração"
+
+msgid "Copied"
+msgstr "Copiado"
+
+msgid "Copy"
+msgstr "Copiar"
+
+msgid "Copy selected text"
+msgstr "Copiar texto selecionado"
+
+msgid "Corners"
+msgstr "Cantos"
+
+msgid "Couldn't check for updates: {}"
+msgstr "Não foi possível procurar atualizações: {}"
+
+msgid "Couldn't create config.toml"
+msgstr "Não foi possível criar o config.toml"
+
+msgid "Couldn't export notes: {}"
+msgstr "Não foi possível exportar as notas: {}"
+
+msgid "Couldn't save config: {}"
+msgstr "Não foi possível salvar a configuração: {}"
+
+msgid "Couldn't save notes: {}"
+msgstr "Não foi possível salvar as notas: {}"
+
+msgid "Couldn't save that: {}"
+msgstr "Não foi possível salvar: {}"
+
+msgid "Ctrl+Enter to save · Esc to cancel"
+msgstr "Ctrl+Enter salva · Esc cancela"
+
+msgid "Dark"
+msgstr "Escuro"
+
+msgid "Data folder"
+msgstr "Pasta de dados"
+
+msgid "Default"
+msgstr "Padrão"
+
+msgid "Default zoom"
+msgstr "Zoom padrão"
+
+msgid "Definition"
+msgstr "Definição"
+
+msgid "Delete"
+msgstr "Excluir"
+
+msgid "Delete session"
+msgstr "Excluir sessão"
+
+msgid "Deleted session {}"
+msgstr "Sessão {} excluída"
+
+msgid "Density"
+msgstr "Densidade"
+
+msgid "Downloading dpdf {}…"
+msgstr "Baixando o dpdf {}…"
+
+msgid "Edit in config.toml"
+msgstr "Editar no config.toml"
+
+msgid "Edit note"
+msgstr "Editar nota"
+
+msgid "Enter to save · Esc to close"
+msgstr "Enter salva · Esc fecha"
+
+msgid "Every setting here, plus keybindings. Changes made in this window are written there too."
+msgstr "Todas as configurações daqui, mais os atalhos. O que você muda nesta janela também é gravado lá."
+
+msgid "Export notes"
+msgstr "Exportar notas"
+
+msgid "Export notes (Markdown, Anki, CSV)…"
+msgstr "Exportar notas (Markdown, Anki, CSV)…"
+
+msgid "File not found: {}"
+msgstr "Arquivo não encontrado: {}"
+
+msgid "First page"
+msgstr "Primeira página"
+
+msgid "Fit page"
+msgstr "Página inteira"
+
+msgid "Fit width"
+msgstr "Ajustar à largura"
+
+msgid "Font"
+msgstr "Fonte"
+
+msgid "For documents you haven't opened before."
+msgstr "Para documentos que você ainda não abriu."
+
+msgid "General"
+msgstr "Geral"
+
+msgid "Go to home screen"
+msgstr "Ir para a tela inicial"
+
+msgid "Go to page {}"
+msgstr "Ir para a página {}"
+
+msgid "Go to page…"
+msgstr "Ir para a página…"
+
+msgid "Group by outline section and color"
+msgstr "Agrupar por seção do sumário e cor"
+
+msgid "Highlight selection"
+msgstr "Grifar seleção"
+
+msgid "Highlight with color 1"
+msgstr "Grifar com a cor 1"
+
+msgid "Highlight with color 2"
+msgstr "Grifar com a cor 2"
+
+msgid "Highlight with color 3"
+msgstr "Grifar com a cor 3"
+
+msgid "Highlight with color 4"
+msgstr "Grifar com a cor 4"
+
+msgid "Highlight with color 5"
+msgstr "Grifar com a cor 5"
+
+msgid "Highlights"
+msgstr "Marcadores"
+
+msgid "Important"
+msgstr "Importante"
+
+msgid "In Anki: File › Import. The note becomes the front, the quote the back."
+msgstr "No Anki: Arquivo › Importar. A nota vira a frente; o trecho, o verso."
+
+msgid "Interface"
+msgstr "Interface"
+
+msgid "Interface language"
+msgstr "Idioma da interface"
+
+msgid "Inverted"
+msgstr "Invertidas"
+
+msgid "Inverted turns white pages dark, for reading at night."
+msgstr "Invertidas deixa as páginas brancas escuras, para ler à noite."
+
+msgid "Keybindings"
+msgstr "Atalhos"
+
+msgid "Keyboard"
+msgstr "Teclado"
+
+msgid "Language"
+msgstr "Idioma"
+
+msgid "Large"
+msgstr "Grande"
+
+msgid "Last page"
+msgstr "Última página"
+
+msgid "Later"
+msgstr "Ver depois"
+
+msgid "Layout"
+msgstr "Layout"
+
+msgid "Light"
+msgstr "Claro"
+
+msgid "Looking for art. {}…"
+msgstr "Procurando o art. {}…"
+
+msgid "Mark current section read / reviewed"
+msgstr "Marcar seção atual como lida / revisada"
+
+msgid "Medium"
+msgstr "Média"
+
+msgid "Menus, messages, and exports."
+msgstr "Menus, mensagens e exportações."
+
+msgid "Navigate"
+msgstr "Navegar"
+
+msgid "New session"
+msgstr "Nova sessão"
+
+msgid "New session…"
+msgstr "Nova sessão…"
+
+msgid "Next page"
+msgstr "Próxima página"
+
+msgid "Next search match"
+msgstr "Próxima ocorrência"
+
+msgid "Next tab"
+msgstr "Próxima aba"
+
+msgid "No matches"
+msgstr "Nada encontrado"
+
+msgid "No notes in the chosen colors"
+msgstr "Nenhuma nota nas cores escolhidas"
+
+msgid "No notes in these colors"
+msgstr "Nenhuma nota nessas cores"
+
+msgid "No notes in this document yet"
+msgstr "Ainda não há notas neste documento"
+
+msgid "No notes yet"
+msgstr "Nenhuma nota ainda"
+
+msgid "No outline"
+msgstr "Sem sumário"
+
+msgid "No tabs in this session"
+msgstr "Nenhuma aba nesta sessão"
+
+msgid "No telemetry, no accounts, no network access. Your notes, settings, and history stay in the data folder."
+msgstr "Sem telemetria, sem contas. Suas notas, configurações e histórico ficam na pasta de dados."
+
+msgid "Note"
+msgstr "Nota"
+
+msgid "Notes"
+msgstr "Notas"
+
+msgid "Notes exported to {}"
+msgstr "Notas exportadas para {}"
+
+msgid "Nothing to redo"
+msgstr "Nada para refazer"
+
+msgid "Nothing to undo"
+msgstr "Nada para desfazer"
+
+msgid "Open"
+msgstr "Abrir"
+
+msgid "Open a PDF with Ctrl+O, or press Ctrl+K for everything else"
+msgstr "Abra um PDF com Ctrl+O ou aperte Ctrl+K para todo o resto"
+
+msgid "Open config.toml"
+msgstr "Abrir config.toml"
+
+msgid "Open file…"
+msgstr "Abrir arquivo…"
+
+msgid "Open folder"
+msgstr "Abrir pasta"
+
+msgid "Open page"
+msgstr "Abrir página"
+
+msgid "Open tab"
+msgstr "Aba aberta"
+
+msgid "Open themes folder"
+msgstr "Abrir pasta de temas"
+
+msgid "Opened link in browser"
+msgstr "Link aberto no navegador"
+
+msgid "Original"
+msgstr "Originais"
+
+msgid "Outline"
+msgstr "Sumário"
+
+msgid "Page colors"
+msgstr "Cores da página"
+
+msgid "Page or art."
+msgstr "Página ou art."
+
+msgid "Page {}"
+msgstr "Página {}"
+
+msgid "Pages"
+msgstr "Páginas"
+
+msgid "Password"
+msgstr "Senha"
+
+msgid "Pause / resume study timer"
+msgstr "Pausar / retomar cronômetro de estudo"
+
+msgid "Previous page"
+msgstr "Página anterior"
+
+msgid "Previous search match"
+msgstr "Ocorrência anterior"
+
+msgid "Previous tab"
+msgstr "Aba anterior"
+
+msgid "Private by design"
+msgstr "Privado por princípio"
+
+msgid "Reading"
+msgstr "Leitura"
+
+msgid "Reattach on startup"
+msgstr "Retomar ao abrir"
+
+msgid "Rebind any action under [keys] using the name on the right, e.g.  zoom-in = [\"ctrl+=\", \"z i\"]. An empty list unbinds it."
+msgstr "Troque o atalho de qualquer ação em [keys] usando o nome à direita, por ex.  zoom-in = [\"ctrl+=\", \"z i\"]. Uma lista vazia remove o atalho."
+
+msgid "Recent"
+msgstr "Recentes"
+
+msgid "Redo annotation change"
+msgstr "Refazer alteração de anotação"
+
+msgid "Reload"
+msgstr "Recarregar"
+
+msgid "Reload config and themes"
+msgstr "Recarregar configuração e temas"
+
+msgid "Reload themes"
+msgstr "Recarregar temas"
+
+msgid "Rename session"
+msgstr "Renomear sessão"
+
+msgid "Rename session…"
+msgstr "Renomear sessão…"
+
+msgid "Reopen the last session's document at the page and zoom you left it, like tmux attach."
+msgstr "Reabre o documento da última sessão na página e no zoom em que você parou, como o tmux attach."
+
+msgid "Reset zoom"
+msgstr "Redefinir zoom"
+
+msgid "Restore defaults"
+msgstr "Restaurar padrões"
+
+msgid "Round"
+msgstr "Redondos"
+
+msgid "Rounded"
+msgstr "Arredondados"
+
+msgid "Save"
+msgstr "Salvar"
+
+msgid "Save…"
+msgstr "Salvar…"
+
+msgid "Scroll down"
+msgstr "Rolar para baixo"
+
+msgid "Scroll half a screen down"
+msgstr "Rolar meia tela para baixo"
+
+msgid "Scroll half a screen up"
+msgstr "Rolar meia tela para cima"
+
+msgid "Scroll left"
+msgstr "Rolar para a esquerda"
+
+msgid "Scroll right"
+msgstr "Rolar para a direita"
+
+msgid "Scroll up"
+msgstr "Rolar para cima"
+
+msgid "Search"
+msgstr "Buscar"
+
+msgid "Search all tabs in session…"
+msgstr "Buscar em todas as abas da sessão…"
+
+msgid "Search commands, tabs, files, themes, or type a page number…"
+msgstr "Busque comandos, abas, arquivos, temas ou digite o número de uma página…"
+
+msgid "Search in document"
+msgstr "Buscar no documento"
+
+msgid "Search settings"
+msgstr "Buscar configurações"
+
+msgid "Search the text of all {} tabs in this session…"
+msgstr "Buscar no texto das {} abas desta sessão…"
+
+msgid "Search the text of the tab in this session…"
+msgstr "Buscar no texto da aba desta sessão…"
+
+msgid "Session"
+msgstr "Sessão"
+
+msgid "Session: {}"
+msgstr "Sessão: {}"
+
+msgid "Sessions"
+msgstr "Sessões"
+
+msgid "Settings"
+msgstr "Configurações"
+
+msgid "Settings  /"
+msgstr "Configurações  /"
+
+msgid "Sharp"
+msgstr "Retos"
+
+msgid "Show notes list"
+msgstr "Mostrar lista de notas"
+
+msgid "Show outline"
+msgstr "Mostrar sumário"
+
+msgid "Show page thumbnails"
+msgstr "Mostrar miniaturas"
+
+msgid "Show page thumbnails next to the document."
+msgstr "Mostra miniaturas das páginas ao lado do documento."
+
+msgid "Skip this version"
+msgstr "Pular esta versão"
+
+msgid "Small"
+msgstr "Pequeno"
+
+msgid "Spacing and header height."
+msgstr "Espaçamento e altura do cabeçalho."
+
+msgid "Spacious"
+msgstr "Espaçosa"
+
+msgid "Study timer paused"
+msgstr "Cronômetro de estudo pausado"
+
+msgid "Study timer running"
+msgstr "Cronômetro de estudo ligado"
+
+msgid "Switch session…"
+msgstr "Trocar de sessão…"
+
+msgid "Text size"
+msgstr "Tamanho do texto"
+
+msgid "The only session can't be deleted"
+msgstr "A única sessão não pode ser excluída"
+
+msgid "Theme"
+msgstr "Tema"
+
+msgid "Theme \"{}\" not found"
+msgstr "Tema \"{}\" não encontrado"
+
+msgid "Theme: {}"
+msgstr "Tema: {}"
+
+msgid "This copy isn't installed, so the release page will open."
+msgstr "Esta cópia não está instalada, então a página da versão será aberta."
+
+msgid "This document has no outline"
+msgstr "Este documento não tem sumário"
+
+msgid "Thumbnail sidebar"
+msgstr "Barra de miniaturas"
+
+msgid "Thumbnail size"
+msgstr "Tamanho das miniaturas"
+
+msgid "Toggle focus mode"
+msgstr "Alternar modo foco"
+
+msgid "Toggle fullscreen"
+msgstr "Alternar tela cheia"
+
+msgid "Toggle sidebar"
+msgstr "Alternar barra lateral"
+
+msgid "Trap"
+msgstr "Pegadinha"
+
+msgid "Undo annotation change"
+msgstr "Desfazer alteração de anotação"
+
+msgid "Update"
+msgstr "Atualizar"
+
+msgid "Update failed: {}"
+msgstr "A atualização falhou: {}"
+
+msgid "Vim keys"
+msgstr "Teclas do vim"
+
+msgid "Visual"
+msgstr "Visual"
+
+msgid "What each color means, shown in the notes panel and in exports. Keys 1–5 pick them in this order."
+msgstr "O que cada cor significa, mostrado na lista de notas e nas exportações. As teclas 1–5 escolhem as cores nesta ordem."
+
+msgid "Wrong password"
+msgstr "Senha incorreta"
+
+msgid "Your themes"
+msgstr "Seus temas"
+
+msgid "Zoom in"
+msgstr "Aumentar zoom"
+
+msgid "Zoom out"
+msgstr "Diminuir zoom"
+
+msgid "\nconfig.toml, themes, annotations, and reading history."
+msgstr "\nconfig.toml, temas, anotações e histórico de leitura."
+
+msgid "any app"
+msgstr "qualquer app"
+
+msgid "dpdf settings"
+msgstr "Configurações do dpdf"
+
+msgid "dpdf will close, update, and open again."
+msgstr "O dpdf vai fechar, atualizar e abrir de novo."
+
+msgid "dpdf {} is available"
+msgstr "dpdf {} disponível"
+
+msgid "front · back · tags"
+msgstr "frente · verso · tags"
+
+msgid "j/k scroll, gg/G first/last page, Ctrl+D/U half screen, / search, n/N matches, : command palette, y copy."
+msgstr "j/k rolam, gg/G primeira/última página, Ctrl+D/U meia tela, / busca, n/N ocorrências, : paleta de comandos, y copia."
+
+msgid "p. {}"
+msgstr "p. {}"
+
+msgid "p. {} · {}"
+msgstr "p. {} · {}"
+
+msgid "p. {}, line {}"
+msgstr "p. {}, linha {}"
+
+msgid "summary by section"
+msgstr "resumo por seção"
+
+msgid "this week {}"
+msgstr "semana {}"
+
+msgid "today {}"
+msgstr "hoje {}"
+
+msgid "{} notes"
+msgstr "{} notas"
+
+msgid "{} of 1 section"
+msgstr "{} de 1 seção"
+
+msgid "{} of {} sections"
+msgstr "{} de {} seções"
+
+msgid "{} tabs"
+msgstr "{} abas"
+
+msgid "{} · current"
+msgstr "{} · atual"

@@ -143,6 +143,7 @@ src/
   export.rs       // pure exports: section summary, Anki TSV, CSV
   study.rs        // study time from activity, per day and document (study.txt)
   config.rs       // config.toml + theme files
+  i18n.rs         // interface language: tr()/trf() for Rust text, from the same .po Slint bundles
   store.rs        // reading history and last session (state.txt)
   nav.rs          // pure page navigation and page-number parsing
   update.rs       // update check and install from GitHub releases
@@ -155,6 +156,7 @@ ui/
   structs.slint   // data passed from Rust
   theme.slint     // design tokens (global Theme, colors set from Rust)
 themes/           // built-in themes, embedded at compile time
+translations/     // pt-BR/LC_MESSAGES/dpdf.po: Portuguese for both .slint (@tr) and Rust (i18n::tr)
 ```
 
 The PDF worker processes one small unit at a time (text selection > page render > search one page > thumbnail) and checks for new requests between units, so new requests replace stale work. Tabs share one live document view. The worker keeps the last few documents open and the viewer keeps their exact scroll position and nearby rendered pages, so switching between recent tabs is instant; older tabs reopen from disk, which keeps memory bounded no matter how many tabs are open.
@@ -165,6 +167,7 @@ Rules:
 - State flows one way: UI callback → `Action` → controller updates state → controller pushes properties to UI.
 - Paths: everything user-owned lives in `%APPDATA%\dpdf` (`config.toml`, `themes\`, `annotations\`, `state.txt`, `study.txt`); caches go in `%LOCALAPPDATA%\dpdf`. Never write next to the executable, in the document folder, or into the PDF.
 - User files must never block startup: parse leniently, fall back to defaults, and report problems in Settings.
+- Every user-visible text is English in the source and translated: `@tr("…")` in `.slint`, `i18n::tr` / `trf` in Rust (`{}` placeholders, like `@tr`). Add each new text to `translations/pt-BR/LC_MESSAGES/dpdf.po`; a test checks placeholders match. Brazilian Portuguese is the default language.
 - Grow the module tree when needed; do not create empty modules ahead of time.
 
 ## 11. Coding standards

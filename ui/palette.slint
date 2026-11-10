@@ -8,7 +8,7 @@ export component Palette inherits Panel {
     in property <[PaletteItem]> items;
     in property <int> selected;
     in-out property <string> query <=> input.text;
-    in property <string> placeholder: "Search commands, tabs, files, themes, or type a page number…";
+    in property <string> placeholder: @tr("Search commands, tabs, files, themes, or type a page number…");
     callback edited(string);
     callback moved(int);
     callback accepted();
@@ -74,7 +74,7 @@ export component Palette inherits Panel {
 
             Text {
                 x: 14px;
-                text: "No matches";
+                text: @tr("No matches");
                 color: Theme.text-muted;
                 font-size: Theme.font-size;
             }
@@ -143,7 +143,7 @@ export component Palette inherits Panel {
             spacing: 6px;
 
             Text {
-                text: "Open";
+                text: @tr("Open");
                 color: Theme.text;
                 font-size: Theme.font-size-small;
                 vertical-alignment: center;
@@ -155,7 +155,7 @@ export component Palette inherits Panel {
                 width: 8px;
             }
             Text {
-                text: "Navigate";
+                text: @tr("Navigate");
                 color: Theme.text;
                 font-size: Theme.font-size-small;
                 vertical-alignment: center;
@@ -167,7 +167,7 @@ export component Palette inherits Panel {
                 horizontal-stretch: 1;
             }
             Text {
-                text: "Close";
+                text: @tr("Close");
                 color: Theme.text;
                 font-size: Theme.font-size-small;
                 vertical-alignment: center;

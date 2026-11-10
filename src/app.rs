@@ -12,6 +12,7 @@ use crate::config::{
     ThemeDef, ThumbnailSize,
 };
 use crate::export::Format;
+use crate::i18n::{self, tr, trf, untr};
 use crate::keymap::{Action, Chord, KeyResult, Keymap};
 use crate::palette::{self, Entry, Target};
 use crate::pdf::{Event, Worker};
@@ -27,6 +28,7 @@ use crate::{
 };
 
 const PALETTE_LIMIT: usize = 12;
+const PALETTE_PLACEHOLDER: &str = "Search commands, tabs, files, themes, or type a page number…";
 /// Shades offered for highlight colors in Settings; any hex works too.
 const HIGHLIGHT_PRESETS: [&str; 10] = [
     "#f7d44c", "#ffa94d", "#ef6b5f", "#f28fb4", "#c49bf0", "#7fb2f0", "#5fd0d0", "#7fd18b",
@@ -34,7 +36,6 @@ const HIGHLIGHT_PRESETS: [&str; 10] = [
 ];
 /// Characters a session search needs before it starts.
 const MIN_SESSION_QUERY: usize = 3;
-const PALETTE_PLACEHOLDER: &str = "Search commands, tabs, files, themes, or type a page number…";
 /// Lines of the export shown in the export sheet.
 const EXPORT_PREVIEW_LINES: usize = 14;
 
@@ -154,6 +155,22 @@ impl App {
     }
 
     fn apply_config(&mut self, window: &AppWindow) {
+        i18n::set_language(&self.config.language);
+        window.set_palette_placeholder(tr(PALETTE_PLACEHOLDER).into());
+        let language = i18n::LANGUAGES
+            .iter()
+            .find(|(code, _)| code.eq_ignore_ascii_case(self.config.language.trim()))
+            .map_or(i18n::LANGUAGES[1].1, |(_, name)| name);
+        self.settings.set_language(language.into());
+        self.settings.set_language_options(
+            Rc::new(VecModel::from(
+                i18n::LANGUAGES
+                    .iter()
+                    .map(|(_, name)| slint::SharedString::from(*name))
+                    .collect::<Vec<_>>(),
+            ))
+            .into(),
+        );
         window.set_sidebar_button(self.config.sidebar_button);
         window.set_study_timer(self.config.study_timer);
         let (keymap, key_problems) = Keymap::new(self.config.vim, &self.config.keys);
@@ -186,9 +203,9 @@ impl App {
         s.set_font_options(Rc::new(VecModel::from(fonts)).into());
         s.set_font_name(self.config.font.as_str().into());
         s.set_font_size(self.config.font_size().round() as i32);
-        s.set_density(label(self.config.density).into());
-        s.set_corners(label(self.config.corners).into());
-        s.set_thumbnail_size(label(self.config.thumbnail_size).into());
+        s.set_density(tr(&label(self.config.density)).into());
+        s.set_corners(tr(&label(self.config.corners)).into());
+        s.set_thumbnail_size(tr(&label(self.config.thumbnail_size)).into());
         self.title_colors = theme.as_ref().map(|t| {
             (
                 to_color(&t.background),
@@ -202,7 +219,7 @@ impl App {
             apply_theme(&window.global::<Theme>(), theme);
             apply_theme(&self.settings.global::<Theme>(), theme);
         } else {
-            problems.push(format!("Theme \"{}\" not found", self.config.theme));
+            problems.push(trf("Theme \"{}\" not found", &[&self.config.theme]));
         }
 
         let built_in: Vec<String> = built_in_themes().into_iter().map(|t| t.name).collect();
@@ -226,15 +243,15 @@ impl App {
             .set_theme_name(theme.map(|t| t.name).unwrap_or_default().into());
         self.settings.set_page_colors(
             match self.config.page_colors {
-                PageColors::Original => "Original",
-                PageColors::Inverted => "Inverted",
+                PageColors::Original => tr("Original"),
+                PageColors::Inverted => tr("Inverted"),
             }
             .into(),
         );
         self.settings.set_default_zoom(
             match self.config.default_zoom {
-                DefaultZoom::FitWidth => "Fit width",
-                DefaultZoom::FitPage => "Fit page",
+                DefaultZoom::FitWidth => tr("Fit width"),
+                DefaultZoom::FitPage => tr("Fit page"),
             }
             .into(),
         );
@@ -281,11 +298,12 @@ impl App {
             .iter()
             .filter(|a| {
                 query.trim().is_empty()
+                    || palette::score(&query, &tr(a.title())).is_some()
                     || palette::score(&query, a.title()).is_some()
                     || palette::score(&query, a.name()).is_some()
             })
             .map(|a| KeyRow {
-                title: a.title().into(),
+                title: tr(a.title()).into(),
                 name: a.name().into(),
                 keys: self.keymap.keys_for(*a).join(",  ").into(),
             })
@@ -325,15 +343,23 @@ impl App {
 
     fn save_config(&self, window: &AppWindow) {
         if let Err(err) = self.config.save() {
-            window.set_status(format!("Couldn't save config: {err}").into());
+            window.set_status(trf("Couldn't save config: {}", &[&err]).into());
         }
     }
 
     /// A change from the settings screen.
     pub fn setting(&mut self, window: &AppWindow, key: &str, value: &str) {
+        // Choices arrive as shown, in the interface language.
+        let english = untr(value);
+        let value = english.as_str();
         let on = value == "true";
         match key {
             "theme" => self.config.theme = value.to_owned(),
+            "language" => {
+                if let Some((code, _)) = i18n::LANGUAGES.iter().find(|(_, name)| *name == value) {
+                    self.config.language = (*code).to_owned();
+                }
+            }
             "page-colors" => {
                 self.config.page_colors = if value == "Inverted" {
                     PageColors::Inverted
@@ -540,40 +566,40 @@ impl App {
                 self.clock.paused = !self.clock.paused;
                 self.clock.reset();
                 window.set_study_paused(self.clock.paused);
-                let state = if self.clock.paused {
-                    "paused"
+                let message = if self.clock.paused {
+                    tr("Study timer paused")
                 } else {
-                    "running"
+                    tr("Study timer running")
                 };
-                self.flash(window, &format!("Study timer {state}"));
+                self.flash(window, &message);
             }
             Action::MarkSection if self.viewer.page_count() > 0 => {
                 if !self.viewer.mark_current_section(window) {
-                    self.flash(window, "This document has no outline");
+                    self.flash(window, &tr("This document has no outline"));
                 }
             }
             Action::Undo | Action::Redo => {
                 if !self.viewer.undo(window, action == Action::Redo) {
-                    let what = if action == Action::Redo {
-                        "redo"
+                    let message = if action == Action::Redo {
+                        tr("Nothing to redo")
                     } else {
-                        "undo"
+                        tr("Nothing to undo")
                     };
-                    self.flash(window, &format!("Nothing to {what}"));
+                    self.flash(window, &message);
                 }
             }
             Action::ExportNotes => self.export_notes(window),
             Action::CheckForUpdates => {
-                window.set_status("Checking for updates…".into());
+                window.set_status(tr("Checking for updates…").into());
                 crate::check_for_update(window, true);
             }
             Action::ReloadConfig => {
                 self.reload_config(window);
-                window.set_status("Config reloaded".into());
+                window.set_status(tr("Config reloaded").into());
             }
             Action::OpenConfig => match self.config.ensure_file() {
                 Some(path) => reveal(&path),
-                None => window.set_status("Couldn't create config.toml".into()),
+                None => window.set_status(tr("Couldn't create config.toml").into()),
             },
             Action::OpenThemesFolder => {
                 if let Some(dir) = config::themes_dir() {
@@ -787,7 +813,7 @@ impl App {
         self.tabs_changed(window);
         self.viewer.store.current_session = index;
         self.load_session(window, true);
-        let message = format!("Session: {}", self.session_name());
+        let message = trf("Session: {}", &[&self.session_name()]);
         self.flash(window, &message);
     }
 
@@ -819,22 +845,22 @@ impl App {
     fn delete_session(&mut self, window: &AppWindow) {
         let store = &mut self.viewer.store;
         if store.sessions.len() <= 1 {
-            self.flash(window, "The only session can't be deleted");
+            self.flash(window, &tr("The only session can't be deleted"));
             return;
         }
         let removed = store.sessions.remove(store.current_session);
         store.current_session = store.current_session.min(store.sessions.len() - 1);
         self.load_session(window, true);
-        self.flash(window, &format!("Deleted session {}", removed.name));
+        self.flash(window, &trf("Deleted session {}", &[&removed.name]));
     }
 
     fn ask_name(&mut self, window: &AppWindow, prompt: Prompt, initial: &str) {
         window.set_prompt_label(
-            match prompt {
+            tr(match prompt {
                 Prompt::NewSession => "New session",
                 Prompt::RenameSession => "Rename session",
                 Prompt::Password(_) => "Password",
-            }
+            })
             .into(),
         );
         window.set_prompt_secret(matches!(prompt, Prompt::Password(_)));
@@ -864,7 +890,7 @@ impl App {
         self.palette_entries = self.session_entries();
         self.palette_entries.push(Entry {
             target: Target::Command(Action::NewSession),
-            title: "New session…".to_owned(),
+            title: tr("New session…"),
             detail: String::new(),
             keys: self
                 .keymap
@@ -890,7 +916,7 @@ impl App {
             .enumerate()
             .map(|(i, s)| Entry {
                 target: Target::Session(i),
-                title: format!("Session: {}", s.name),
+                title: trf("Session: {}", &[&s.name]),
                 detail: session_detail(s, i == store.current_session),
                 keys: String::new(),
             })
@@ -997,11 +1023,11 @@ impl App {
                 );
                 let mut detail = Vec::new();
                 if total > 0 {
-                    detail.push(format!("{done} of {total} sections"));
+                    detail.push(trf("{} of {} sections", &[&done, &total]));
                 }
                 detail.push(match notes.items.len() {
-                    1 => "1 note".to_owned(),
-                    n => format!("{n} notes"),
+                    1 => tr("1 note"),
+                    n => trf("{} notes", &[&n]),
                 });
                 let time = self.study.for_path(path);
                 if time >= 60 {
@@ -1023,13 +1049,13 @@ impl App {
         window.set_subjects(Rc::new(VecModel::from(subjects)).into());
         let mut summary = Vec::new();
         if self.config.study_timer {
-            summary.push(format!(
+            summary.push(trf(
                 "today {}",
-                study::format_duration(self.study.total(today, today))
+                &[&study::format_duration(self.study.total(today, today))],
             ));
-            summary.push(format!(
+            summary.push(trf(
                 "this week {}",
-                study::format_duration(self.study.total(today - 6, today))
+                &[&study::format_duration(self.study.total(today - 6, today))],
             ));
         }
         window.set_study_summary(summary.join(" · ").into());
@@ -1059,7 +1085,7 @@ impl App {
                 if self.viewer.is_pending(&path) {
                     self.ask_name(window, Prompt::Password(path), "");
                     if retry {
-                        window.set_prompt_label("Wrong password".into());
+                        window.set_prompt_label(tr("Wrong password").into());
                     }
                 }
             }
@@ -1068,7 +1094,7 @@ impl App {
                 if let Some(uri) = self.viewer.link(window, target) {
                     // Only http(s) and mailto links get here (see pdf::safe_uri).
                     let _ = Command::new("explorer.exe").arg(&uri).spawn();
-                    self.flash(window, "Opened link in browser");
+                    self.flash(window, &tr("Opened link in browser"));
                 }
             }
             Event::Rendered {
@@ -1119,7 +1145,7 @@ impl App {
         match crate::nav::parse_article(text) {
             Some(number) => {
                 self.viewer.find_article(number);
-                window.set_status(format!("Looking for art. {number}…").into());
+                window.set_status(trf("Looking for art. {}…", &[&number]).into());
             }
             None => self.viewer.go_to_typed_page(window, text),
         }
@@ -1131,7 +1157,7 @@ impl App {
                 window.set_status("".into());
                 self.viewer.go_to_page(window, page);
             }
-            None => self.flash(window, &format!("Art. {number} not found")),
+            None => self.flash(window, &trf("Art. {} not found", &[&number])),
         }
     }
 
@@ -1141,25 +1167,22 @@ impl App {
     fn end_session_search(&mut self, window: &AppWindow) {
         if self.session_search.take().is_some() {
             self.viewer.search_files(0, "", Vec::new());
-            window.set_palette_placeholder(PALETTE_PLACEHOLDER.into());
+            window.set_palette_placeholder(tr(PALETTE_PLACEHOLDER).into());
         }
     }
 
     fn open_session_search(&mut self, window: &AppWindow) {
         if self.tabs.is_empty() {
-            self.flash(window, "No tabs in this session");
+            self.flash(window, &tr("No tabs in this session"));
             return;
         }
         self.palette_entries.clear();
         self.session_search = Some(self.next_session_search);
         window.set_palette_placeholder(
-            format!(
-                "Search the text of {} in this session…",
-                match self.tabs.len() {
-                    1 => "the tab".to_owned(),
-                    n => format!("all {n} tabs"),
-                }
-            )
+            match self.tabs.len() {
+                1 => tr("Search the text of the tab in this session…"),
+                n => trf("Search the text of all {} tabs in this session…", &[&n]),
+            }
             .into(),
         );
         window.set_palette_query("".into());
@@ -1199,12 +1222,16 @@ impl App {
         }
         let matches = match count {
             1 => String::new(),
-            n => format!(" · {n} matches"),
+            n => trf(" · {} matches", &[&n]),
         };
         self.palette_shown.push(Entry {
             target: Target::Hit(path.clone(), page),
             title: snippet,
-            detail: format!("{} · p. {}{matches}", file_name(&path), page + 1),
+            detail: format!(
+                "{} · {}{matches}",
+                file_name(&path),
+                trf("p. {}", &[&(page + 1)])
+            ),
             keys: String::new(),
         });
         self.update_palette(window);
@@ -1242,7 +1269,7 @@ impl App {
                 self.set_overlay(window, "note");
             }
             PopupOutcome::Copied => {
-                window.set_status("Copied".into());
+                window.set_status(tr("Copied").into());
                 clear_status_later(window);
             }
             PopupOutcome::Nothing => {}
@@ -1261,7 +1288,7 @@ impl App {
             return;
         }
         if !self.viewer.has_notes() {
-            self.flash(window, "No notes in this document yet");
+            self.flash(window, &tr("No notes in this document yet"));
             return;
         }
         self.update_export(window);
@@ -1282,8 +1309,8 @@ impl App {
         window.set_export_preview(preview.into());
         window.set_export_count(
             match count {
-                1 => "1 note".to_owned(),
-                n => format!("{n} notes"),
+                1 => tr("1 note"),
+                n => trf("{} notes", &[&n]),
             }
             .into(),
         );
@@ -1328,7 +1355,7 @@ impl App {
         let folder = self.config.notes_folder.trim();
         let target = if folder.is_empty() {
             rfd::FileDialog::new()
-                .set_title("Export notes")
+                .set_title(tr("Export notes"))
                 .set_file_name(&name)
                 .add_filter(format.label(), &[format.extension()])
                 .save_file()
@@ -1340,8 +1367,8 @@ impl App {
         };
         self.set_overlay(window, "");
         let message = match std::fs::write(&path, text) {
-            Ok(()) => format!("Notes exported to {}", file_name(&path)),
-            Err(err) => format!("Couldn't export notes: {err}"),
+            Ok(()) => trf("Notes exported to {}", &[&file_name(&path)]),
+            Err(err) => trf("Couldn't export notes: {}", &[&err]),
         };
         self.flash(window, &message);
     }
@@ -1355,7 +1382,7 @@ impl App {
             entries.push(Entry {
                 target: Target::Tab(i),
                 title: file_name(path),
-                detail: "Open tab".to_owned(),
+                detail: tr("Open tab"),
                 keys: String::new(),
             });
         }
@@ -1365,7 +1392,7 @@ impl App {
             }
             entries.push(Entry {
                 target: Target::Command(*action),
-                title: action.title().to_owned(),
+                title: tr(action.title()),
                 detail: String::new(),
                 keys: self
                     .keymap
@@ -1379,8 +1406,8 @@ impl App {
         for theme in &self.themes {
             entries.push(Entry {
                 target: Target::Theme(theme.name.clone()),
-                title: format!("Theme: {}", theme.name),
-                detail: if theme.dark { "Dark" } else { "Light" }.to_owned(),
+                title: trf("Theme: {}", &[&theme.name]),
+                detail: tr(if theme.dark { "Dark" } else { "Light" }),
                 keys: String::new(),
             });
         }
@@ -1416,7 +1443,7 @@ impl App {
                     0,
                     Entry {
                         target: Target::GoToPage(page - 1),
-                        title: format!("Go to page {page}"),
+                        title: trf("Go to page {}", &[&page]),
                         detail: String::new(),
                         keys: String::new(),
                     },
@@ -1500,7 +1527,7 @@ impl App {
                 clear_status_later(window);
             }
             Err(err) if manual => {
-                window.set_status(format!("Couldn't check for updates: {err}").into());
+                window.set_status(trf("Couldn't check for updates: {}", &[&err]).into());
                 clear_status_later(window);
             }
             _ => {}
@@ -1515,14 +1542,14 @@ impl App {
         };
         match action {
             "install" if update::installed() => {
-                window.set_status(format!("Downloading dpdf {}…", release.version).into());
+                window.set_status(trf("Downloading dpdf {}…", &[&release.version]).into());
                 crate::download_update(window, release);
             }
             // A portable copy: let the user fetch the new zip.
             "install" => update::open_page(&release),
             "skip" => {
                 if let Err(err) = update::skip(&release) {
-                    window.set_status(format!("Couldn't save that: {err}").into());
+                    window.set_status(trf("Couldn't save that: {}", &[&err]).into());
                     clear_status_later(window);
                 }
             }
@@ -1538,7 +1565,7 @@ impl App {
                 let _ = slint::quit_event_loop();
             }
             Err(err) => {
-                window.set_status(format!("Update failed: {err}").into());
+                window.set_status(trf("Update failed: {}", &[&err]).into());
                 clear_status_later(window);
             }
         }
@@ -1554,7 +1581,7 @@ impl App {
 /// Words each settings section answers to, for the settings search box:
 /// general, reading, theme, appearance, keybindings, files.
 const SECTION_WORDS: [&str; 6] = [
-    "general session sessions restore startup tabs attach",
+    "general session sessions restore startup tabs attach language idioma",
     "reading zoom fit width page default sidebar thumbnails vim keyboard highlights colors names markers study",
     "theme themes colors dark light custom",
     "appearance interface font text size density spacing compact corners rounded thumbnails page colors inverted night dark",
@@ -1565,9 +1592,10 @@ const SECTION_WORDS: [&str; 6] = [
 fn matching_sections(query: &str) -> [bool; 6] {
     let query = query.trim();
     // Every action is listed under Keybindings, so match those too.
-    let action_match = Action::ALL
-        .iter()
-        .any(|a| palette::score(query, a.title()).is_some());
+    let action_match = Action::ALL.iter().any(|a| {
+        palette::score(query, a.title()).is_some()
+            || palette::score(query, &tr(a.title())).is_some()
+    });
     let mut shown = SECTION_WORDS.map(|words| {
         query.is_empty() || words.split(' ').any(|w| palette::score(query, w).is_some())
     });
@@ -1582,11 +1610,11 @@ fn label(value: impl std::fmt::Debug) -> String {
 
 fn session_detail(session: &Session, current: bool) -> String {
     let tabs = match session.tabs.len() {
-        1 => "1 tab".to_owned(),
-        n => format!("{n} tabs"),
+        1 => tr("1 tab"),
+        n => trf("{} tabs", &[&n]),
     };
     if current {
-        format!("{tabs} · current")
+        trf("{} · current", &[&tabs])
     } else {
         tabs
     }

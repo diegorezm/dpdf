@@ -204,7 +204,11 @@ impl Annotations {
         for a in items {
             if page != Some(a.page) {
                 page = Some(a.page);
-                let _ = write!(out, "\n## Page {}\n", a.page + 1);
+                let _ = write!(
+                    out,
+                    "\n## {}\n",
+                    crate::i18n::trf("Page {}", &[&(a.page + 1)])
+                );
             }
             let text = a.text.split_whitespace().collect::<Vec<_>>().join(" ");
             let text = match a.kind {
@@ -212,7 +216,7 @@ impl Annotations {
                 Kind::Highlight | Kind::Underline => text,
             };
             let place = if a.line > 0 {
-                format!("p. {}, line {}", a.page + 1, a.line)
+                crate::i18n::trf("p. {}, line {}", &[&(a.page + 1), &a.line])
             } else {
                 format!("p. {}", a.page + 1)
             };

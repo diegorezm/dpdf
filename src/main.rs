@@ -6,6 +6,7 @@ mod app;
 mod cache;
 mod config;
 mod export;
+mod i18n;
 mod keymap;
 mod layout;
 mod nav;

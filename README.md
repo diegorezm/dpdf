@@ -20,6 +20,7 @@ dpdf is a calm, keyboard-first reading environment: the page fills the screen, a
 - **Search:** in-document text search with match highlighting, a search across every tab in the session that ignores accents, and `art. 37` to jump to an article of a law.
 - **Command palette** (`Ctrl+K`): every command, open tab, recent file, and theme, with fuzzy matching. Type a number to jump to that page.
 - **Customizable:** themes, interface font, density, and keybindings in TOML, optional **vim keys**, inverted page colors for night reading.
+- **Interface in Brazilian Portuguese** (default) or English.
 - Opens password-protected PDFs; drop files on the window to open them.
 
 ## Screenshots

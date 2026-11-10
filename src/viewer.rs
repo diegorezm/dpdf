@@ -15,6 +15,7 @@ use crate::annotations::{self, Annotations, History, Kind};
 use crate::cache::PageCache;
 use crate::config::{parse_color, DefaultZoom};
 use crate::export;
+use crate::i18n::trf;
 use crate::keymap::Action;
 use crate::layout::{self, Layout, Zoom};
 use crate::nav;
@@ -302,7 +303,7 @@ impl Viewer {
             self.store.recent.retain(|r| r.path != path);
             self.save();
             self.update_recent();
-            window.set_status(format!("File not found: {}", path.display()).into());
+            window.set_status(trf("File not found: {}", &[&path.display()]).into());
             return false;
         }
         window.set_status("".into());
@@ -950,9 +951,9 @@ impl Viewer {
                     .map(|a| {
                         let page = self.page_name(a.page);
                         let detail = if a.note.is_empty() {
-                            format!("p. {page}")
+                            trf("p. {}", &[&page])
                         } else {
-                            format!("p. {page} · {}", truncate(&a.note, 120))
+                            trf("p. {} · {}", &[&page, &truncate(&a.note, 120)])
                         };
                         let row = SideItem {
                             title: truncate(&a.text, 140).into(),
@@ -1101,8 +1102,8 @@ impl Viewer {
         let (done, total) = self.progress();
         let text = match total {
             0 => String::new(),
-            1 => format!("{done} of 1 section"),
-            _ => format!("{done} of {total} sections"),
+            1 => trf("{} of 1 section", &[&done]),
+            _ => trf("{} of {} sections", &[&done, &total]),
         };
         window.set_outline_progress_text(text.into());
         window.set_outline_progress(if total == 0 {
@@ -1545,7 +1546,7 @@ impl Viewer {
         };
         self.annotations.document = path.display().to_string();
         if let Err(err) = self.annotations.save(&path) {
-            window.set_status(format!("Couldn't save notes: {err}").into());
+            window.set_status(trf("Couldn't save notes: {}", &[&err]).into());
         }
     }
 

@@ -6,7 +6,14 @@ use std::{env, fs};
 const PDFIUM_RELEASE: &str = "chromium/8125";
 
 fn main() {
-    slint_build::compile("ui/app.slint").expect("failed to compile ui/app.slint");
+    // Texts are translated without context, so one entry in the .po file
+    // covers a text wherever it appears; Rust reads the same file.
+    let config = slint_build::CompilerConfiguration::new()
+        .with_bundled_translations("translations")
+        .with_default_translation_context(slint_build::DefaultTranslationContext::None);
+    slint_build::compile_with_config("ui/app.slint", config)
+        .expect("failed to compile ui/app.slint");
+    println!("cargo:rerun-if-changed=translations");
     println!("cargo:rerun-if-changed=build.rs");
 
     println!("cargo:rerun-if-changed=assets/icon.ico");

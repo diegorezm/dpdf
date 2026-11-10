@@ -76,7 +76,7 @@ export component AppWindow inherits Window {
     in property <[PaletteItem]> palette-items;
     in property <int> palette-selected;
     in-out property <string> palette-query <=> palette.query;
-    in property <string> palette-placeholder: "Search commands, tabs, files, themes, or type a page number…";
+    in property <string> palette-placeholder: @tr("Search commands, tabs, files, themes, or type a page number…");
     in-out property <string> note-text <=> note-input.text;
     in property <string> note-quote;
     // Export sheet: "markdown", "anki", or "csv".
@@ -304,7 +304,7 @@ export component AppWindow inherits Window {
                                     color: open-touch.has-hover ? Theme.text : Theme.text-muted;
                                 }
                                 Text {
-                                    text: "Open";
+                                    text: @tr("Open");
                                     color: open-touch.has-hover ? Theme.text : Theme.text-muted;
                                     font-size: Theme.font-size;
                                     vertical-alignment: center;
@@ -330,7 +330,7 @@ export component AppWindow inherits Window {
 
                         TextButton {
                             y: (parent.height - self.height) / 2;
-                            text: "Fit width";
+                            text: @tr("Fit width");
                             active: root.zoom-mode == "fit-width";
                             clicked => {
                                 root.zoom-action("fit-width");
@@ -338,7 +338,7 @@ export component AppWindow inherits Window {
                         }
                         TextButton {
                             y: (parent.height - self.height) / 2;
-                            text: "Fit page";
+                            text: @tr("Fit page");
                             active: root.zoom-mode == "fit-page";
                             clicked => {
                                 root.zoom-action("fit-page");
@@ -528,12 +528,12 @@ export component AppWindow inherits Window {
                             spacing: 10px;
 
                             Text {
-                                text: "dpdf \{root.update-version} is available";
+                                text: @tr("dpdf {} is available", root.update-version);
                                 color: Theme.text;
                                 font-size: Theme.font-size;
                             }
                             Text {
-                                text: root.update-installs ? "dpdf will close, update, and open again." : "This copy isn't installed, so the release page will open.";
+                                text: root.update-installs ? @tr("dpdf will close, update, and open again.") : @tr("This copy isn't installed, so the release page will open.");
                                 color: Theme.text-muted;
                                 font-size: Theme.font-size-small;
                                 wrap: word-wrap;
@@ -543,19 +543,19 @@ export component AppWindow inherits Window {
                                 spacing: 4px;
 
                                 TextButton {
-                                    text: "Skip this version";
+                                    text: @tr("Skip this version");
                                     clicked => {
                                         root.update-action("skip");
                                     }
                                 }
                                 TextButton {
-                                    text: "Later";
+                                    text: @tr("Later");
                                     clicked => {
                                         root.update-action("later");
                                     }
                                 }
                                 TextButton {
-                                    text: root.update-installs ? "Update" : "Open page";
+                                    text: root.update-installs ? @tr("Update") : @tr("Open page");
                                     active: true;
                                     clicked => {
                                         root.update-action("install");
@@ -670,19 +670,19 @@ export component AppWindow inherits Window {
                                 }
                             }
                             TextButton {
-                                text: root.popup == "annotation" && root.annotation-has-note ? "Edit note" : "Note";
+                                text: root.popup == "annotation" && root.annotation-has-note ? @tr("Edit note") : @tr("Note");
                                 clicked => {
                                     root.popup-action("note", 0);
                                 }
                             }
                             TextButton {
-                                text: "Copy";
+                                text: @tr("Copy");
                                 clicked => {
                                     root.popup-action("copy", 0);
                                 }
                             }
                             if root.popup == "annotation": TextButton {
-                                text: "Delete";
+                                text: @tr("Delete");
                                 clicked => {
                                     root.popup-action("delete", 0);
                                 }
@@ -730,7 +730,7 @@ export component AppWindow inherits Window {
 
                         if search-input.text == "": Text {
                             x: 12px;
-                            text: "Search";
+                            text: @tr("Search");
                             color: Theme.text-muted;
                             font-size: Theme.font-size;
                         }
@@ -750,7 +750,7 @@ export component AppWindow inherits Window {
                             spacing: 8px;
 
                             Text {
-                                text: "Page or art.";
+                                text: @tr("Page or art.");
                                 color: Theme.text-muted;
                                 font-size: Theme.font-size;
                                 vertical-alignment: center;
@@ -793,7 +793,7 @@ export component AppWindow inherits Window {
 
                                 HorizontalLayout {
                                     Text {
-                                        text: "Export notes";
+                                        text: @tr("Export notes");
                                         color: Theme.text;
                                         font-size: Theme.font-size-large;
                                         font-weight: 600;
@@ -811,9 +811,9 @@ export component AppWindow inherits Window {
                                     spacing: 8px;
 
                                     for f in [
-                                        { id: "markdown", label: "Markdown", detail: "summary by section" },
-                                        { id: "anki", label: "Anki", detail: "front · back · tags" },
-                                        { id: "csv", label: "CSV", detail: "any app" },
+                                        { id: "markdown", label: "Markdown", detail: @tr("summary by section") },
+                                        { id: "anki", label: "Anki", detail: @tr("front · back · tags") },
+                                        { id: "csv", label: "CSV", detail: @tr("any app") },
                                     ]: Rectangle {
                                         height: 52px;
                                         horizontal-stretch: 1;
@@ -900,7 +900,7 @@ export component AppWindow inherits Window {
                                         }
                                     }
                                     Text {
-                                        text: "Group by outline section and color";
+                                        text: @tr("Group by outline section and color");
                                         color: Theme.text;
                                         font-size: Theme.font-size-small;
                                         vertical-alignment: center;
@@ -918,7 +918,7 @@ export component AppWindow inherits Window {
                                         x: 12px;
                                         y: 10px;
                                         width: parent.width - 24px;
-                                        text: root.export-ready ? root.export-preview : "No notes in the chosen colors";
+                                        text: root.export-ready ? root.export-preview : @tr("No notes in the chosen colors");
                                         color: Theme.text-muted;
                                         font-family: "Cascadia Mono, Consolas";
                                         font-size: Theme.font-size-small;
@@ -929,7 +929,7 @@ export component AppWindow inherits Window {
 
                                 HorizontalLayout {
                                     Text {
-                                        text: root.export-format == "anki" ? "In Anki: File › Import. The note becomes the front, the quote the back." : "Enter to save · Esc to close";
+                                        text: root.export-format == "anki" ? @tr("In Anki: File › Import. The note becomes the front, the quote the back.") : @tr("Enter to save · Esc to close");
                                         color: Theme.text-muted;
                                         font-size: Theme.font-size-small;
                                         vertical-alignment: center;
@@ -937,7 +937,7 @@ export component AppWindow inherits Window {
                                         wrap: word-wrap;
                                     }
                                     Button {
-                                        text: "Save…";
+                                        text: @tr("Save…");
                                         primary: true;
                                         clicked => {
                                             root.export-accepted();
@@ -998,14 +998,14 @@ export component AppWindow inherits Window {
                                 }
                                 HorizontalLayout {
                                     Text {
-                                        text: "Ctrl+Enter to save · Esc to cancel";
+                                        text: @tr("Ctrl+Enter to save · Esc to cancel");
                                         color: Theme.text-muted;
                                         font-size: Theme.font-size-small;
                                         vertical-alignment: center;
                                         horizontal-stretch: 1;
                                     }
                                     TextButton {
-                                        text: "Save";
+                                        text: @tr("Save");
                                         active: true;
                                         clicked => {
                                             root.note-saved();
@@ -1046,7 +1046,7 @@ export component AppWindow inherits Window {
 
 // Settings live in their own window, so they can sit beside the document.
 export component SettingsWindow inherits Window {
-    title: "dpdf settings";
+    title: @tr("dpdf settings");
     icon: @image-url("../assets/icon.svg");
     preferred-width: 900px;
     preferred-height: 640px;
@@ -1071,6 +1071,8 @@ export component SettingsWindow inherits Window {
     in property <bool> vim;
     in property <[KeyRow]> key-rows;
     in property <[HighlightRow]> highlight-rows;
+    in property <string> language;
+    in property <[string]> language-options;
     in property <[color]> highlight-presets;
     in property <string> data-dir;
     in property <string> problems;
@@ -1119,6 +1121,8 @@ export component SettingsWindow inherits Window {
             vim: root.vim;
             keys: root.key-rows;
             highlights: root.highlight-rows;
+            language: root.language;
+            language-options: root.language-options;
             presets: root.highlight-presets;
             data-dir: root.data-dir;
             problems: root.problems;

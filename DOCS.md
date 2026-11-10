@@ -64,6 +64,7 @@ Everything lives in `%APPDATA%\dpdf\` (Settings → General → Data folder):
 Font, keybindings, and more in `config.toml`:
 
 ```toml
+language = "pt-BR"               # interface language: "pt-BR" (default) or "en"
 font = "Segoe UI Variable Text"  # any installed font, e.g. "Inter"
 font_size = 14                   # 10 to 22
 density = "comfortable"          # compact, comfortable, spacious

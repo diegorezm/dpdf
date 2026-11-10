@@ -20,6 +20,8 @@ All notable changes to dpdf. Versions follow [Semantic Versioning](https://semve
   day and document (`Ctrl+T` pauses it; `study_timer = false` hides it).
 - **Home screen** lists the session's tabs with progress, notes, and time.
 - **Session search** (`Ctrl+Shift+F`) across every tab, ignoring accents.
+- **Brazilian Portuguese interface**, the new default; English stays
+  available in Settings → General → Language (`language` in config.toml).
 - **Go to article**: `art. 37` in Go to page jumps to that article.
 
 ## 1.0.4 — 2026-11-09

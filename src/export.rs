@@ -131,7 +131,10 @@ fn markdown_by_section(items: &[&Annotation], opts: &Options) -> String {
         let _ = write!(
             out,
             "\n## {}\n",
-            section.unwrap_or("Before the first section")
+            section.map_or_else(
+                || crate::i18n::tr("Before the first section"),
+                str::to_owned
+            )
         );
         for (color, _) in COLORS {
             let in_color: Vec<_> = list.iter().filter(|a| a.color == color).collect();

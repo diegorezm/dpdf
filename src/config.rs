@@ -99,6 +99,8 @@ pub struct Config {
     pub sidebar_button: bool,
     /// Ask GitHub for a newer release on startup.
     pub check_updates: bool,
+    /// Interface language: "pt-BR" or "en".
+    pub language: String,
     /// Interface font family, e.g. "Segoe UI Variable Text" or "Inter".
     pub font: String,
     /// Interface font size in logical pixels.
@@ -128,6 +130,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             theme: "Graphite".to_owned(),
+            language: "pt-BR".to_owned(),
             page_colors: PageColors::Original,
             default_zoom: DefaultZoom::FitWidth,
             restore_session: true,
@@ -142,35 +145,32 @@ impl Default for Config {
             vim: false,
             notes_folder: String::new(),
             study_timer: true,
-            color_names: default_color_names(),
+            color_names: BTreeMap::new(),
             highlight_colors: BTreeMap::new(),
             keys: BTreeMap::new(),
         }
     }
 }
 
-/// Meanings that fit studying for exams; renamed in config.toml.
-fn default_color_names() -> BTreeMap<String, String> {
-    [
-        ("yellow", "Important"),
-        ("green", "Case law"),
-        ("blue", "Later"),
-        ("pink", "Definition"),
-        ("red", "Trap"),
-    ]
-    .into_iter()
-    .map(|(c, n)| (c.to_owned(), n.to_owned()))
-    .collect()
-}
+/// Meanings that fit studying for exams, in English; shown translated
+/// unless renamed.
+const DEFAULT_COLOR_NAMES: [(&str, &str); 5] = [
+    ("yellow", "Important"),
+    ("green", "Case law"),
+    ("blue", "Later"),
+    ("pink", "Definition"),
+    ("red", "Trap"),
+];
 
 impl Config {
     /// The name the user gave a highlight color, or the color itself.
     pub fn color_name(&self, color: &str) -> String {
         match self.color_names.get(color) {
             Some(name) if !name.trim().is_empty() => name.trim().to_owned(),
-            _ => default_color_names()
-                .remove(color)
-                .unwrap_or_else(|| color.to_owned()),
+            _ => DEFAULT_COLOR_NAMES
+                .iter()
+                .find(|(c, _)| *c == color)
+                .map_or_else(|| color.to_owned(), |(_, name)| crate::i18n::tr(name)),
         }
     }
 

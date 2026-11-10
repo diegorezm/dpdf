@@ -143,7 +143,7 @@ component ThemeGrid inherits Rectangle {
             spacing: 5px;
 
             Text {
-                text: theme.custom ? theme.name + "  ·  custom" : theme.name;
+                text: theme.custom ? theme.name + @tr("  ·  custom") : theme.name;
                 color: theme.text;
                 font-size: Theme.font-size;
                 vertical-alignment: center;
@@ -184,6 +184,8 @@ export component SettingsView inherits Rectangle {
     in property <bool> sidebar;
     in property <bool> vim;
     in property <[KeyRow]> keys;
+    in property <string> language;
+    in property <[string]> language-options;
     in property <[HighlightRow]> highlights;
     in property <[color]> presets;
     in property <string> data-dir;
@@ -241,7 +243,7 @@ export component SettingsView inherits Rectangle {
 
                     if search.text == "": Text {
                         x: 36px;
-                        text: "Search settings";
+                        text: @tr("Search settings");
                         color: Theme.text-muted;
                         font-size: Theme.font-size;
                     }
@@ -251,7 +253,7 @@ export component SettingsView inherits Rectangle {
                 }
 
                 if root.show-general: NavItem {
-                    text: "General";
+                    text: @tr("General");
                     icon: "general";
                     active: root.section == "general";
                     clicked => {
@@ -259,7 +261,7 @@ export component SettingsView inherits Rectangle {
                     }
                 }
                 if root.show-reading: NavItem {
-                    text: "Reading";
+                    text: @tr("Reading");
                     icon: "reading";
                     active: root.section == "reading";
                     clicked => {
@@ -268,10 +270,10 @@ export component SettingsView inherits Rectangle {
                 }
 
                 if root.show-theme || root.show-appearance: NavGroup {
-                    text: "Visual";
+                    text: @tr("Visual");
                 }
                 if root.show-theme: NavItem {
-                    text: "Theme";
+                    text: @tr("Theme");
                     icon: "theme";
                     active: root.section == "theme";
                     clicked => {
@@ -279,7 +281,7 @@ export component SettingsView inherits Rectangle {
                     }
                 }
                 if root.show-appearance: NavItem {
-                    text: "Appearance";
+                    text: @tr("Appearance");
                     icon: "appearance";
                     active: root.section == "appearance";
                     clicked => {
@@ -288,10 +290,10 @@ export component SettingsView inherits Rectangle {
                 }
 
                 if root.show-keys || root.show-files: NavGroup {
-                    text: "App";
+                    text: @tr("App");
                 }
                 if root.show-keys: NavItem {
-                    text: "Keybindings";
+                    text: @tr("Keybindings");
                     icon: "keys";
                     active: root.section == "keys";
                     clicked => {
@@ -299,7 +301,7 @@ export component SettingsView inherits Rectangle {
                     }
                 }
                 if root.show-files: NavItem {
-                    text: "Configuration files";
+                    text: @tr("Configuration files");
                     icon: "file";
                     active: root.section == "files";
                     clicked => {
@@ -351,13 +353,13 @@ export component SettingsView inherits Rectangle {
                     spacing: 8px;
 
                     Text {
-                        text: "Settings  /";
+                        text: @tr("Settings  /");
                         color: Theme.text-muted;
                         font-size: Theme.font-size;
                         vertical-alignment: center;
                     }
                     Text {
-                        text: root.section == "general" ? "General" : root.section == "reading" ? "Reading" : root.section == "theme" ? "Theme" : root.section == "appearance" ? "Appearance" : root.section == "keys" ? "Keybindings" : root.section == "files" ? "Configuration files" : "About";
+                        text: root.section == "general" ? @tr("General") : root.section == "reading" ? @tr("Reading") : root.section == "theme" ? @tr("Theme") : root.section == "appearance" ? @tr("Appearance") : root.section == "keys" ? @tr("Keybindings") : root.section == "files" ? @tr("Configuration files") : @tr("About");
                         color: Theme.text;
                         font-size: Theme.font-size;
                         vertical-alignment: center;
@@ -365,7 +367,7 @@ export component SettingsView inherits Rectangle {
                     }
                     TextButton {
                         y: (parent.height - self.height) / 2;
-                        text: "Restore defaults";
+                        text: @tr("Restore defaults");
                         clicked => {
                             root.set("reset", "");
                         }
@@ -416,12 +418,30 @@ export component SettingsView inherits Rectangle {
                         spacing: Theme.spacing;
 
                         SectionTitle {
-                            text: "Session";
+                            text: @tr("Language");
                         }
                         Card {
                             Row {
-                                title: "Reattach on startup";
-                                description: "Reopen the last session's document at the page and zoom you left it, like tmux attach.";
+                                title: @tr("Interface language");
+                                description: @tr("Menus, messages, and exports.");
+                                last: true;
+                                Select {
+                                    options: root.language-options;
+                                    value: root.language;
+                                    selected(value) => {
+                                        root.set("language", value);
+                                    }
+                                }
+                            }
+                        }
+
+                        SectionTitle {
+                            text: @tr("Session");
+                        }
+                        Card {
+                            Row {
+                                title: @tr("Reattach on startup");
+                                description: @tr("Reopen the last session's document at the page and zoom you left it, like tmux attach.");
                                 last: true;
                                 Toggle {
                                     checked: root.restore-session;
@@ -437,14 +457,14 @@ export component SettingsView inherits Rectangle {
                         spacing: Theme.spacing;
 
                         SectionTitle {
-                            text: "Layout";
+                            text: @tr("Layout");
                         }
                         Card {
                             Row {
-                                title: "Default zoom";
-                                description: "For documents you haven't opened before.";
+                                title: @tr("Default zoom");
+                                description: @tr("For documents you haven't opened before.");
                                 Select {
-                                    options: ["Fit width", "Fit page"];
+                                    options: [@tr("Fit width"), @tr("Fit page")];
                                     value: root.default-zoom;
                                     selected(value) => {
                                         root.set("default-zoom", value);
@@ -452,8 +472,8 @@ export component SettingsView inherits Rectangle {
                                 }
                             }
                             Row {
-                                title: "Thumbnail sidebar";
-                                description: "Show page thumbnails next to the document.";
+                                title: @tr("Thumbnail sidebar");
+                                description: @tr("Show page thumbnails next to the document.");
                                 last: true;
                                 Toggle {
                                     checked: root.sidebar;
@@ -465,10 +485,10 @@ export component SettingsView inherits Rectangle {
                         }
 
                         SectionTitle {
-                            text: "Highlights";
+                            text: @tr("Highlights");
                         }
                         Text {
-                            text: "What each color means, shown in the notes panel and in exports. Keys 1–5 pick them in this order.";
+                            text: @tr("What each color means, shown in the notes panel and in exports. Keys 1–5 pick them in this order.");
                             color: Theme.text-muted;
                             font-size: Theme.font-size-small;
                             wrap: word-wrap;
@@ -571,7 +591,7 @@ export component SettingsView inherits Rectangle {
                                             }
                                         }
                                         TextButton {
-                                            text: "Default";
+                                            text: @tr("Default");
                                             font-size: Theme.font-size-small;
                                             clicked => {
                                                 root.set("color-hex", h.key + "=reset");
@@ -589,12 +609,12 @@ export component SettingsView inherits Rectangle {
                         }
 
                         SectionTitle {
-                            text: "Keyboard";
+                            text: @tr("Keyboard");
                         }
                         Card {
                             Row {
-                                title: "Vim keys";
-                                description: "j/k scroll, gg/G first/last page, Ctrl+D/U half screen, / search, n/N matches, : command palette, y copy.";
+                                title: @tr("Vim keys");
+                                description: @tr("j/k scroll, gg/G first/last page, Ctrl+D/U half screen, / search, n/N matches, : command palette, y copy.");
                                 last: true;
                                 Toggle {
                                     checked: root.vim;
@@ -610,7 +630,7 @@ export component SettingsView inherits Rectangle {
                         spacing: Theme.spacing;
 
                         SectionTitle {
-                            text: "Theme";
+                            text: @tr("Theme");
                         }
                         ThemeGrid {
                             themes: root.theme-cards;
@@ -621,24 +641,24 @@ export component SettingsView inherits Rectangle {
                         }
 
                         SectionTitle {
-                            text: "Your themes";
+                            text: @tr("Your themes");
                         }
                         Card {
                             Row {
-                                title: "Reload themes";
-                                description: "Add .toml files to the themes folder.";
+                                title: @tr("Reload themes");
+                                description: @tr("Add .toml files to the themes folder.");
                                 last: true;
                                 HorizontalLayout {
                                     spacing: 6px;
 
                                     Button {
-                                        text: "Open folder";
+                                        text: @tr("Open folder");
                                         clicked => {
                                             root.set("open-themes", "");
                                         }
                                     }
                                     Button {
-                                        text: "Reload";
+                                        text: @tr("Reload");
                                         clicked => {
                                             root.set("reload", "");
                                         }
@@ -652,12 +672,12 @@ export component SettingsView inherits Rectangle {
                         spacing: Theme.spacing;
 
                         SectionTitle {
-                            text: "Interface";
+                            text: @tr("Interface");
                         }
                         Card {
                             Row {
-                                title: "Font";
-                                description: "Any installed font also works in config.toml.";
+                                title: @tr("Font");
+                                description: @tr("Any installed font also works in config.toml.");
                                 Select {
                                     options: root.font-options;
                                     value: root.font-name;
@@ -667,7 +687,7 @@ export component SettingsView inherits Rectangle {
                                 }
                             }
                             Row {
-                                title: "Text size";
+                                title: @tr("Text size");
                                 HorizontalLayout {
                                     spacing: 4px;
 
@@ -694,10 +714,10 @@ export component SettingsView inherits Rectangle {
                                 }
                             }
                             Row {
-                                title: "Density";
-                                description: "Spacing and header height.";
+                                title: @tr("Density");
+                                description: @tr("Spacing and header height.");
                                 Select {
-                                    options: ["Compact", "Comfortable", "Spacious"];
+                                    options: [@tr("Compact"), @tr("Comfortable"), @tr("Spacious")];
                                     value: root.density;
                                     selected(value) => {
                                         root.set("density", value);
@@ -705,9 +725,9 @@ export component SettingsView inherits Rectangle {
                                 }
                             }
                             Row {
-                                title: "Corners";
+                                title: @tr("Corners");
                                 Select {
-                                    options: ["Sharp", "Rounded", "Round"];
+                                    options: [@tr("Sharp"), @tr("Rounded"), @tr("Round")];
                                     value: root.corners;
                                     selected(value) => {
                                         root.set("corners", value);
@@ -715,10 +735,10 @@ export component SettingsView inherits Rectangle {
                                 }
                             }
                             Row {
-                                title: "Thumbnail size";
+                                title: @tr("Thumbnail size");
                                 last: true;
                                 Select {
-                                    options: ["Small", "Medium", "Large"];
+                                    options: [@tr("Small"), @tr("Medium"), @tr("Large")];
                                     value: root.thumbnail-size;
                                     selected(value) => {
                                         root.set("thumbnail-size", value);
@@ -728,15 +748,15 @@ export component SettingsView inherits Rectangle {
                         }
 
                         SectionTitle {
-                            text: "Pages";
+                            text: @tr("Pages");
                         }
                         Card {
                             Row {
-                                title: "Page colors";
-                                description: "Inverted turns white pages dark, for reading at night.";
+                                title: @tr("Page colors");
+                                description: @tr("Inverted turns white pages dark, for reading at night.");
                                 last: true;
                                 Select {
-                                    options: ["Original", "Inverted"];
+                                    options: [@tr("Original"), @tr("Inverted")];
                                     value: root.page-colors;
                                     selected(value) => {
                                         root.set("page-colors", value);
@@ -751,19 +771,19 @@ export component SettingsView inherits Rectangle {
 
                         HorizontalLayout {
                             SectionTitle {
-                                text: "Keybindings";
+                                text: @tr("Keybindings");
                                 vertical-alignment: center;
                                 horizontal-stretch: 1;
                             }
                             Button {
-                                text: "Edit in config.toml";
+                                text: @tr("Edit in config.toml");
                                 clicked => {
                                     root.set("open-config", "");
                                 }
                             }
                         }
                         Text {
-                            text: "Rebind any action under [keys] using the name on the right, e.g.  zoom-in = [\"ctrl+=\", \"z i\"]. An empty list unbinds it.";
+                            text: @tr("Rebind any action under [keys] using the name on the right, e.g.  zoom-in = [\"ctrl+=\", \"z i\"]. An empty list unbinds it.");
                             color: Theme.text-muted;
                             font-size: Theme.font-size-small;
                             wrap: word-wrap;
@@ -816,23 +836,23 @@ export component SettingsView inherits Rectangle {
                         spacing: Theme.spacing;
 
                         SectionTitle {
-                            text: "Configuration files";
+                            text: @tr("Configuration files");
                         }
                         Card {
                             Row {
                                 title: "config.toml";
-                                description: "Every setting here, plus keybindings. Changes made in this window are written there too.";
+                                description: @tr("Every setting here, plus keybindings. Changes made in this window are written there too.");
                                 HorizontalLayout {
                                     spacing: 6px;
 
                                     Button {
-                                        text: "Open";
+                                        text: @tr("Open");
                                         clicked => {
                                             root.set("open-config", "");
                                         }
                                     }
                                     Button {
-                                        text: "Reload";
+                                        text: @tr("Reload");
                                         clicked => {
                                             root.set("reload", "");
                                         }
@@ -840,11 +860,11 @@ export component SettingsView inherits Rectangle {
                                 }
                             }
                             Row {
-                                title: "Data folder";
-                                description: root.data-dir + "\nconfig.toml, themes, annotations, and reading history.";
+                                title: @tr("Data folder");
+                                description: root.data-dir + @tr("\nconfig.toml, themes, annotations, and reading history.");
                                 last: true;
                                 Button {
-                                    text: "Open";
+                                    text: @tr("Open");
                                     clicked => {
                                         root.set("open-data-dir", "");
                                     }
@@ -861,12 +881,12 @@ export component SettingsView inherits Rectangle {
                         }
                         Card {
                             Row {
-                                title: "A fast, minimal, local-first PDF reader";
-                                description: "Built with Rust, Slint, and PDFium. MIT licensed.";
+                                title: @tr("A fast, minimal, local-first PDF reader");
+                                description: @tr("Built with Rust, Slint, and PDFium. MIT licensed.");
                             }
                             Row {
-                                title: "Private by design";
-                                description: "No telemetry, no accounts, no network access. Your notes, settings, and history stay in the data folder.";
+                                title: @tr("Private by design");
+                                description: @tr("No telemetry, no accounts, no network access. Your notes, settings, and history stay in the data folder.");
                                 last: true;
                             }
                         }
