@@ -2,6 +2,16 @@
 
 All notable changes to dpdf. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 1.1.0 — 2026-11-10
+
+### Changed
+
+- **Header icons.** Fit width, fit page, zoom, and settings are icons; hovering
+  shows the name and its shortcut.
+- **Notifications.** Messages like "Downloading dpdf…" or "Copied" appear in
+  the bottom-right corner instead of the header. Click × or press `Esc` to
+  dismiss.
+
 ## 1.0.5 — 2026-11-10
 
 ### Added
