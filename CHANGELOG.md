@@ -2,7 +2,7 @@
 
 All notable changes to dpdf. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 1.0.5 — 2026-11-10
 
 ### Added
 
