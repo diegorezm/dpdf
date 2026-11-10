@@ -28,6 +28,11 @@ pub const COLORS: [(&str, &str); 5] = [
     ("red", "#ef6b5f"),
 ];
 
+/// The position of a color in `COLORS`, which is also its key (1–5).
+pub fn color_index(name: &str) -> Option<usize> {
+    COLORS.iter().position(|(n, _)| *n == name)
+}
+
 pub fn color_hex(name: &str) -> &'static str {
     COLORS
         .iter()

@@ -62,9 +62,7 @@ pub struct Options<'a> {
 
 impl Options<'_> {
     fn color_name<'s>(&'s self, color: &'s str) -> &'s str {
-        COLORS
-            .iter()
-            .position(|(c, _)| *c == color)
+        crate::annotations::color_index(color)
             .and_then(|i| self.names.get(i))
             .map_or(color, String::as_str)
     }

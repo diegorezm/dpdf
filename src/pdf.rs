@@ -341,9 +341,44 @@ struct FilesJob<'a> {
     id: u64,
     query: Vec<char>,
     paths: VecDeque<PathBuf>,
-    /// The document being searched and the next page in it.
-    current: Option<(PathBuf, PdfDocument<'a>, usize)>,
+    /// The document being searched, the next page in it, and the document
+    /// itself once a page's text isn't cached.
+    current: Option<(PathBuf, usize, Option<PdfDocument<'a>>)>,
     hits: usize,
+}
+
+/// Page texts of documents searched before, so searching again while
+/// typing reads no PDF. Bounded by document count; a page's text is a few
+/// KB.
+#[derive(Default)]
+struct FileTexts {
+    /// Least recently searched first.
+    docs: VecDeque<(PathBuf, Option<std::time::SystemTime>, Vec<Option<String>>)>,
+}
+
+const CACHED_FILE_TEXTS: usize = 12;
+
+impl FileTexts {
+    /// The cached pages of `path`, made current; `None` if not cached or
+    /// the file changed.
+    fn pages(&mut self, path: &Path) -> Option<&mut Vec<Option<String>>> {
+        let i = self.docs.iter().position(|(p, _, _)| p == path)?;
+        let entry = self.docs.remove(i)?;
+        if entry.1 != modified(path) {
+            return None;
+        }
+        self.docs.push_back(entry);
+        self.docs.back_mut().map(|(_, _, pages)| pages)
+    }
+
+    fn insert(&mut self, path: &Path, page_count: usize) {
+        self.docs.retain(|(p, _, _)| p != path);
+        if self.docs.len() >= CACHED_FILE_TEXTS {
+            self.docs.pop_front();
+        }
+        self.docs
+            .push_back((path.to_owned(), modified(path), vec![None; page_count]));
+    }
 }
 
 /// Results a file search stops at.
@@ -379,20 +414,23 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
     let mut link: Option<(usize, (f32, f32))> = None;
     let mut select_line: Option<(usize, (f32, f32))> = None;
     let mut files: Option<FilesJob> = None;
+    let mut file_texts = FileTexts::default();
     let mut article: Option<ArticleJob> = None;
 
     loop {
-        let idle = files.is_none()
-            && (documents.is_empty() || article.is_none())
-            && (documents.is_empty()
-                || (renders.pages.is_empty()
-                    && renders.previews.is_empty()
-                    && thumbs.pages.is_empty()
-                    && search.is_none()
-                    && select.is_none()
-                    && select_line.is_none()
-                    && link.is_none()
-                    && !labels_due));
+        // Work on the live document the reader is waiting for, and work
+        // that can wait for it.
+        let urgent = !documents.is_empty()
+            && (!renders.pages.is_empty()
+                || !renders.previews.is_empty()
+                || search.is_some()
+                || select.is_some()
+                || select_line.is_some()
+                || link.is_some()
+                || article.is_some());
+        let background =
+            files.is_some() || (!documents.is_empty() && (!thumbs.pages.is_empty() || labels_due));
+        let idle = !urgent && !background;
         let request = if idle {
             match rx.recv() {
                 Ok(request) => Some(request),
@@ -532,18 +570,10 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
         }
 
         // Other documents are searched only when the live one has nothing
-        // else to do, so reading never waits for them.
-        let live_busy = !documents.is_empty()
-            && (!renders.pages.is_empty()
-                || !renders.previews.is_empty()
-                || search.is_some()
-                || select.is_some()
-                || select_line.is_some()
-                || link.is_some()
-                || article.is_some());
-        if !live_busy {
+        // urgent to do, so reading never waits for them.
+        if !urgent {
             if let Some(job) = &mut files {
-                if search_files_step(&pdfium, job, &on_event) {
+                if search_files_step(&pdfium, job, &mut file_texts, &on_event) {
                     on_event(Event::FilesDone { id: job.id });
                     files = None;
                 }
@@ -715,30 +745,47 @@ fn find_in_text(text: &str, query: &[char]) -> Option<(usize, String)> {
 fn search_files_step<'a>(
     pdfium: &'a Pdfium,
     job: &mut FilesJob<'a>,
+    texts: &mut FileTexts,
     on_event: &impl Fn(Event),
 ) -> bool {
     if job.hits >= MAX_FILE_HITS {
         return true;
     }
-    let Some((path, doc, page)) = &mut job.current else {
+    let Some((path, page, doc)) = &mut job.current else {
         let Some(path) = job.paths.pop_front() else {
             return true;
         };
-        // Encrypted or broken documents are skipped.
-        if let Ok((doc, _)) = open(pdfium, &path, None) {
-            job.current = Some((path, doc, 0));
+        if texts.pages(&path).is_none() {
+            // Encrypted or broken documents are skipped.
+            let Ok((doc, sizes)) = open(pdfium, &path, None) else {
+                return false;
+            };
+            texts.insert(&path, sizes.len());
+            job.current = Some((path, 0, Some(doc)));
+        } else {
+            job.current = Some((path, 0, None));
         }
         return false;
     };
-    let count = doc.pages().len() as usize;
-    if *page >= count {
+    let Some(pages) = texts.pages(path) else {
         job.current = None;
         return false;
+    };
+    let Some(slot) = pages.get_mut(*page) else {
+        job.current = None;
+        return false;
+    };
+    if slot.is_none() {
+        if doc.is_none() {
+            *doc = open(pdfium, path, None).ok().map(|(d, _)| d);
+        }
+        *slot = doc.as_ref().and_then(|d| {
+            load_page(d, *page)
+                .ok()
+                .and_then(|p| p.text().ok().map(|t| t.all()))
+        });
     }
-    let text = load_page(doc, *page)
-        .ok()
-        .and_then(|p| p.text().ok().map(|t| t.all()));
-    if let Some((matches, snippet)) = text.and_then(|t| find_in_text(&t, &job.query)) {
+    if let Some((matches, snippet)) = slot.as_deref().and_then(|t| find_in_text(t, &job.query)) {
         job.hits += 1;
         on_event(Event::FileHit {
             id: job.id,

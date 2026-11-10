@@ -81,6 +81,8 @@ pub struct App {
     /// The palette is searching the session's documents, with this id.
     session_search: Option<u64>,
     next_session_search: u64,
+    /// Waits for a pause in typing before searching the session.
+    session_timer: slint::Timer,
     /// A page to show once its document opens, and the query to highlight.
     open_at: Option<(PathBuf, usize, String)>,
 
@@ -129,6 +131,7 @@ impl App {
             export_by_section: true,
             session_search: None,
             next_session_search: 0,
+            session_timer: slint::Timer::default(),
             open_at: None,
             palette_entries: Vec::new(),
             palette_shown: Vec::new(),
@@ -414,7 +417,7 @@ impl App {
                     return;
                 };
                 let value = value.trim();
-                if !crate::annotations::COLORS.iter().any(|(c, _)| *c == color) {
+                if crate::annotations::color_index(color).is_none() {
                     return;
                 }
                 if key == "color-name" {
@@ -1196,16 +1199,24 @@ impl App {
         self.session_search = Some(id);
         self.palette_shown.clear();
         self.palette_selected = 0;
-        let query = query.trim();
-        let paths = if query.chars().count() >= MIN_SESSION_QUERY {
-            self.tabs.clone()
-        } else {
-            Vec::new()
-        };
-        let searching = !paths.is_empty();
-        self.viewer
-            .search_files(id, if searching { query } else { "" }, paths);
         self.update_palette(window);
+        let query = query.trim().to_owned();
+        if query.chars().count() < MIN_SESSION_QUERY {
+            self.session_timer.stop();
+            self.viewer.search_files(id, "", Vec::new());
+            return;
+        }
+        self.session_timer.start(
+            slint::TimerMode::SingleShot,
+            std::time::Duration::from_millis(200),
+            move || {
+                crate::with_app(|app| {
+                    if app.session_search == Some(id) {
+                        app.viewer.search_files(id, &query, app.tabs.clone());
+                    }
+                });
+            },
+        );
     }
 
     fn file_hit(

@@ -439,14 +439,12 @@ impl Viewer {
         self.update_side_items();
         self.update_progress(window);
         let sections = self.sections().count();
-        if self.annotations.outline_sections != sections && self.has_notes_or_progress() {
+        if self.annotations.outline_sections != sections
+            && (self.has_notes() || !self.annotations.sections.is_empty())
+        {
             self.annotations.outline_sections = sections;
             self.save_annotations(window);
         }
-    }
-
-    fn has_notes_or_progress(&self) -> bool {
-        !self.annotations.items.is_empty() || !self.annotations.sections.is_empty()
     }
 
     fn reset_document_state(&mut self, window: &AppWindow) {
@@ -460,6 +458,8 @@ impl Viewer {
         self.note_target = None;
         self.annotations = Annotations::default();
         self.history.clear();
+        // A filter set for one document would hide colors in the next.
+        self.hidden_colors.clear();
         self.close_search(window);
     }
 
@@ -904,15 +904,7 @@ impl Viewer {
         let (items, pages): (Vec<SideItem>, Vec<usize>) = match self.side_panel {
             SidePanel::Thumbs => Default::default(),
             SidePanel::Outline => {
-                // The current section starts nearest before the page.
-                let current = self
-                    .outline
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, item)| Some((i, item.page?)))
-                    .filter(|(_, page)| *page <= self.current_page)
-                    .max_by_key(|(_, page)| *page)
-                    .map(|(i, _)| i);
+                let current = self.current_section();
                 let annotations = &self.annotations;
                 let side_outline = &mut self.side_outline;
                 self.outline
@@ -976,22 +968,13 @@ impl Viewer {
 
     /// The colors used in this document, with counts, for the notes filter.
     fn update_note_filters(&self) {
-        let filters: Vec<NoteFilter> = annotations::COLORS
-            .iter()
-            .zip(&self.color_names)
-            .filter_map(|((color, _), name)| {
-                let count = self
-                    .annotations
-                    .items
-                    .iter()
-                    .filter(|a| a.color == *color)
-                    .count();
-                (count > 0).then(|| NoteFilter {
-                    name: name.as_str().into(),
-                    color: self.shade(color),
-                    count: ui_int(count),
-                    on: !self.hidden_colors.contains(*color),
-                })
+        let filters: Vec<NoteFilter> = self
+            .used_colors()
+            .map(|(i, color, count)| NoteFilter {
+                name: self.color_names.get(i).map_or(color, String::as_str).into(),
+                color: self.shade(color),
+                count: ui_int(count),
+                on: !self.hidden_colors.contains(color),
             })
             .collect();
         self.note_filters.set_vec(filters);
@@ -999,6 +982,11 @@ impl Viewer {
 
     /// Sets the highlight colors' names and shades, in `COLORS` order.
     pub fn set_colors(&mut self, window: &AppWindow, names: Vec<String>, shades: Vec<Color>) {
+        // Config is reapplied on every settings change; most don't touch colors.
+        let unchanged = names == self.color_names && shades == self.color_shades;
+        if unchanged && window.get_annotation_colors().row_count() > 0 {
+            return;
+        }
         self.color_names = names;
         self.color_shades = shades;
         window.set_annotation_colors(Rc::new(VecModel::from(self.color_shades.clone())).into());
@@ -1009,9 +997,7 @@ impl Viewer {
 
     /// The shade a highlight color is drawn in.
     fn shade(&self, color: &str) -> Color {
-        annotations::COLORS
-            .iter()
-            .position(|(name, _)| *name == color)
+        annotations::color_index(color)
             .and_then(|i| self.color_shades.get(i).copied())
             .unwrap_or_else(|| to_color(annotations::color_hex(color)))
     }
@@ -1019,17 +1005,31 @@ impl Viewer {
     /// Shows or hides a color in the notes list; `index` counts only the
     /// colors in use, like the filter rows.
     pub fn note_filter_clicked(&mut self, index: usize) {
-        let used: Vec<&str> = annotations::COLORS
-            .iter()
-            .map(|(name, _)| *name)
-            .filter(|name| self.annotations.items.iter().any(|a| a.color == *name))
-            .collect();
-        if let Some(color) = used.get(index) {
-            if !self.hidden_colors.remove(*color) {
-                self.hidden_colors.insert((*color).to_owned());
+        let picked = self.used_colors().nth(index).map(|(_, color, _)| color);
+        if let Some(color) = picked {
+            if !self.hidden_colors.remove(color) {
+                self.hidden_colors.insert(color.to_owned());
             }
         }
         self.update_side_items();
+    }
+
+    /// The colors this document uses, in palette order: index, name, and
+    /// how many annotations have it.
+    fn used_colors(&self) -> impl Iterator<Item = (usize, &'static str, usize)> + '_ {
+        annotations::COLORS
+            .iter()
+            .enumerate()
+            .map(|(i, (color, _))| {
+                let count = self
+                    .annotations
+                    .items
+                    .iter()
+                    .filter(|a| a.color == *color)
+                    .count();
+                (i, *color, count)
+            })
+            .filter(|(_, _, count)| *count > 0)
     }
 
     pub fn has_notes(&self) -> bool {
@@ -1054,21 +1054,25 @@ impl Viewer {
 
     /// Advances the progress of the section the reader is in.
     pub fn mark_current_section(&mut self, window: &AppWindow) -> bool {
-        let current = self
-            .outline
-            .iter()
-            .enumerate()
-            .filter_map(|(i, item)| Some((i, item.page?)))
-            .filter(|(_, page)| *page <= self.current_page)
-            .max_by_key(|(_, page)| *page)
-            .map(|(i, _)| i);
-        match current {
+        match self.current_section() {
             Some(i) => {
                 self.cycle_section(window, i);
                 true
             }
             None => false,
         }
+    }
+
+    /// The outline entry the reader is in: the last one starting at or
+    /// before the current page.
+    fn current_section(&self) -> Option<usize> {
+        self.outline
+            .iter()
+            .enumerate()
+            .filter_map(|(i, item)| Some((i, item.page?)))
+            .filter(|(_, page)| *page <= self.current_page)
+            .max_by_key(|(_, page)| *page)
+            .map(|(i, _)| i)
     }
 
     fn cycle_section(&mut self, window: &AppWindow, outline_index: usize) {
