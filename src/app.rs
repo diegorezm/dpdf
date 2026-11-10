@@ -262,6 +262,7 @@ impl App {
             .set_restore_session(self.config.restore_session);
         self.settings.set_sidebar_default(self.config.sidebar);
         self.settings.set_vim(self.config.vim);
+        self.settings.set_study_timer(self.config.study_timer);
         self.settings.set_problems(problems.join("\n").into());
 
         self.update_key_rows();
@@ -411,6 +412,10 @@ impl App {
                 self.viewer.sidebar_shown(window);
             }
             "vim" => self.config.vim = on,
+            "study-timer" => {
+                self.config.study_timer = on;
+                self.clock.reset();
+            }
             // "yellow=Important" and "yellow=#f7d44c".
             "color-name" | "color-hex" => {
                 let Some((color, value)) = value.split_once('=') else {
@@ -564,6 +569,9 @@ impl App {
                 let index = action.color_index().unwrap_or(0);
                 let outcome = self.viewer.color_key(window, index);
                 self.popup_outcome(window, outcome);
+            }
+            Action::ToggleStudyTimer if !self.config.study_timer => {
+                self.flash(window, &tr("The study timer is off in Settings"));
             }
             Action::ToggleStudyTimer => {
                 self.clock.paused = !self.clock.paused;
@@ -1593,7 +1601,7 @@ impl App {
 /// general, reading, theme, appearance, keybindings, files.
 const SECTION_WORDS: [&str; 6] = [
     "general session sessions restore startup tabs attach language idioma",
-    "reading zoom fit width page default sidebar thumbnails vim keyboard highlights colors names markers study",
+    "reading zoom fit width page default sidebar thumbnails vim keyboard highlights colors names markers study timer",
     "theme themes colors dark light custom",
     "appearance interface font text size density spacing compact corners rounded thumbnails page colors inverted night dark",
     "keybindings keys shortcuts bindings vim",

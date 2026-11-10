@@ -183,6 +183,7 @@ export component SettingsView inherits Rectangle {
     in property <bool> restore-session;
     in property <bool> sidebar;
     in property <bool> vim;
+    in property <bool> study-timer;
     in property <[KeyRow]> keys;
     in property <string> language;
     in property <[string]> language-options;
@@ -604,6 +605,23 @@ export component SettingsView inherits Rectangle {
                                     y: parent.height - 1px;
                                     height: 1px;
                                     background: Theme.border;
+                                }
+                            }
+                        }
+
+                        SectionTitle {
+                            text: @tr("Study");
+                        }
+                        Card {
+                            Row {
+                                title: @tr("Study timer");
+                                description: @tr("Shows today's reading time in the header and keeps it per day and document. Off, nothing is counted or shown.");
+                                last: true;
+                                Toggle {
+                                    checked: root.study-timer;
+                                    toggled => {
+                                        root.set("study-timer", root.study-timer ? "false" : "true");
+                                    }
                                 }
                             }
                         }

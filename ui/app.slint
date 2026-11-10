@@ -1069,6 +1069,7 @@ export component SettingsWindow inherits Window {
     in property <bool> restore-session;
     in property <bool> sidebar-default;
     in property <bool> vim;
+    in property <bool> study-timer;
     in property <[KeyRow]> key-rows;
     in property <[HighlightRow]> highlight-rows;
     in property <string> language;
@@ -1119,6 +1120,7 @@ export component SettingsWindow inherits Window {
             restore-session: root.restore-session;
             sidebar: root.sidebar-default;
             vim: root.vim;
+            study-timer: root.study-timer;
             keys: root.key-rows;
             highlights: root.highlight-rows;
             language: root.language;

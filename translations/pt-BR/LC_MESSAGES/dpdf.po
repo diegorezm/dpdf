@@ -655,3 +655,15 @@ msgstr "{} abas"
 
 msgid "{} · current"
 msgstr "{} · atual"
+
+msgid "Study"
+msgstr "Estudo"
+
+msgid "Study timer"
+msgstr "Cronômetro de estudo"
+
+msgid "Shows today's reading time in the header and keeps it per day and document. Off, nothing is counted or shown."
+msgstr "Mostra no cabeçalho o tempo de leitura de hoje e o registra por dia e documento. Desligado, nada é contado nem mostrado."
+
+msgid "The study timer is off in Settings"
+msgstr "O cronômetro de estudo está desligado nas Configurações"
