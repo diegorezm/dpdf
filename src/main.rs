@@ -14,6 +14,7 @@ mod pdf;
 mod recover;
 mod search;
 mod store;
+mod study;
 mod titlebar;
 mod update;
 mod viewer;
@@ -122,11 +123,17 @@ fn main() -> Result<(), slint::PlatformError> {
             return false;
         };
         let mut handled = false;
-        with_app(|app| handled = app.key_pressed(&window, &text, ctrl, shift, alt));
+        with_app(|app| {
+            app.activity(&window);
+            handled = app.key_pressed(&window, &text, ctrl, shift, alt);
+        });
         handled
     });
 
-    on!(window.on_scrolled, |app, win| app.viewer().scrolled(&win));
+    on!(window.on_scrolled, |app, win| {
+        app.activity(&win);
+        app.viewer().scrolled(&win)
+    });
     // While the window is being resized, pages are stretched and only
     // re-rendered once resizing pauses.
     let resize_timer = slint::Timer::default();
@@ -179,6 +186,7 @@ fn main() -> Result<(), slint::PlatformError> {
             "sessions" => Action::SwitchSession,
             "new-session" => Action::NewSession,
             "sidebar" => Action::ToggleSidebar,
+            "study-timer" => Action::ToggleStudyTimer,
             _ => Action::Open,
         };
         app.run(&win, action)
@@ -206,9 +214,14 @@ fn main() -> Result<(), slint::PlatformError> {
         .open_tab(&win, index(i)));
     on!(window.on_tab_closed, |app, win, i| app
         .close_tab(&win, index(i)));
-    on!(window.on_reader_pointer, |app, win, kind, x, y| app
-        .viewer()
-        .pointer(&win, &kind, x, y));
+    on!(window.on_reader_pointer, |app, win, kind, x, y| {
+        if kind != "hover" {
+            app.activity(&win);
+        }
+        app.viewer().pointer(&win, &kind, x, y)
+    });
+    on!(window.on_open_subject, |app, win, i| app
+        .open_tab(&win, index(i)));
     on!(window.on_popup_action, |app, win, action, i| app
         .popup_action(&win, &action, index(i)));
     on!(window.on_update_action, |app, win, action| app

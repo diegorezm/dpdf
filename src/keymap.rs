@@ -71,6 +71,7 @@ actions! {
     Copy => "copy", "Copy selected text";
     Highlight => "highlight", "Highlight selection";
     AddNote => "add-note", "Add note to selection";
+    ToggleStudyTimer => "toggle-study-timer", "Pause / resume study timer";
     MarkSection => "mark-section", "Mark current section read / reviewed";
     Color1 => "color-1", "Highlight with color 1";
     Color2 => "color-2", "Highlight with color 2";
@@ -138,6 +139,7 @@ const DEFAULT_KEYS: &[(Action, &str)] = &[
     (Action::Highlight, "ctrl+h"),
     (Action::AddNote, "ctrl+n"),
     (Action::MarkSection, "ctrl+l"),
+    (Action::ToggleStudyTimer, "ctrl+t"),
     (Action::Color1, "1"),
     (Action::Color2, "2"),
     (Action::Color3, "3"),

@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { PageView, ThumbView, RecentItem, TabItem, SideItem, NoteFilter } from "structs.slint";
+import { PageView, ThumbView, RecentItem, TabItem, SideItem, NoteFilter, SubjectItem } from "structs.slint";
 import { Button, Icon, TextButton } from "widgets.slint";
 
 // Page thumbnails, the outline, or the notes list. Rust positions only
@@ -358,6 +358,10 @@ export component StartScreen inherits Rectangle {
     in property <string> status;
     in property <[RecentItem]> sessions;
     in property <string> session-name;
+    // The session's documents and today's / this week's study time.
+    in property <[SubjectItem]> subjects;
+    in property <string> study-summary;
+    callback open-subject(int);
     callback open-recent(int);
     callback open-session(int);
     callback new-session();
@@ -445,6 +449,80 @@ export component StartScreen inherits Rectangle {
                     mouse-cursor: pointer;
                     clicked => {
                         root.open-session(i);
+                    }
+                }
+            }
+        }
+
+        if root.subjects.length > 0: VerticalLayout {
+            spacing: 2px;
+
+            HorizontalLayout {
+                Text {
+                    text: root.session-name;
+                    color: Theme.text-muted;
+                    font-size: Theme.font-size-small;
+                    horizontal-stretch: 1;
+                }
+                Text {
+                    text: root.study-summary;
+                    color: Theme.text-muted;
+                    font-size: Theme.font-size-small;
+                }
+            }
+
+            for subject[i] in root.subjects: Rectangle {
+                height: subject-layout.preferred-height;
+                border-radius: Theme.radius;
+                background: subject-touch.has-hover ? Theme.hover : transparent;
+
+                subject-layout := VerticalLayout {
+                    padding: 10px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
+                    spacing: 5px;
+
+                    HorizontalLayout {
+                        spacing: 10px;
+
+                        Text {
+                            text: subject.title;
+                            color: Theme.text;
+                            font-size: Theme.font-size;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+                        if subject.has-progress: Text {
+                            text: "\{round(subject.progress * 100)}%";
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-small;
+                            vertical-alignment: center;
+                        }
+                    }
+                    if subject.has-progress: Rectangle {
+                        height: 3px;
+                        border-radius: 1.5px;
+                        background: Theme.border;
+
+                        Rectangle {
+                            x: 0;
+                            width: parent.width * subject.progress;
+                            border-radius: 1.5px;
+                            background: Theme.accent;
+                        }
+                    }
+                    Text {
+                        text: subject.detail;
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size-small;
+                        overflow: elide;
+                    }
+                }
+
+                subject-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.open-subject(i);
                     }
                 }
             }

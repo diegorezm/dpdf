@@ -273,6 +273,10 @@ impl Viewer {
         self.path.as_deref() == Some(path) || self.pending.as_deref() == Some(path)
     }
 
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
+    }
+
     pub fn title(&self) -> &str {
         &self.title
     }
@@ -418,6 +422,15 @@ impl Viewer {
         self.update_recent();
         self.update_side_items();
         self.update_progress(window);
+        let sections = self.sections().count();
+        if self.annotations.outline_sections != sections && self.has_notes_or_progress() {
+            self.annotations.outline_sections = sections;
+            self.save_annotations(window);
+        }
+    }
+
+    fn has_notes_or_progress(&self) -> bool {
+        !self.annotations.items.is_empty() || !self.annotations.sections.is_empty()
     }
 
     fn reset_document_state(&mut self, window: &AppWindow) {
@@ -1037,6 +1050,7 @@ impl Viewer {
             return;
         };
         self.annotations.cycle_level(page, &title);
+        self.annotations.outline_sections = self.sections().count();
         self.save_annotations(window);
         self.update_side_items();
         self.update_progress(window);

@@ -1,12 +1,12 @@
 import { Theme } from "theme.slint";
-import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter } from "structs.slint";
+import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter, SubjectItem } from "structs.slint";
 import { Panel, Field, TextButton, Icon, Toggle, Button } from "widgets.slint";
 import { Sidebar, ReadingArea, StartScreen, TabBar } from "reader.slint";
 import { Palette } from "palette.slint";
 import { SettingsView } from "settings.slint";
 
 export { Theme }
-export { Highlight, Mark, PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter } from "structs.slint";
+export { Highlight, Mark, PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter, SubjectItem } from "structs.slint";
 
 export component AppWindow inherits Window {
     title: root.page-count > 0 ? "\{root.document-title} — dpdf" : "dpdf";
@@ -58,6 +58,13 @@ export component AppWindow inherits Window {
     in property <[RecentItem]> sessions;
     in property <string> session-name: "main";
     in property <bool> home: true;
+    in property <[SubjectItem]> subjects;
+    in property <string> study-summary;
+
+    // Study time today, shown in the header while `study-timer` is on.
+    in property <bool> study-timer;
+    in property <bool> study-paused;
+    in property <string> study-time: "0m";
 
     // Overlays: "", "search", "goto", "palette", "prompt", or "note".
     in property <string> prompt-label;
@@ -105,6 +112,7 @@ export component AppWindow inherits Window {
     callback side-item-status-clicked(int);
     callback note-filter-clicked(int);
     callback open-recent(int);
+    callback open-subject(int);
     callback open-session(int);
     callback prompt-accepted(string);
     // "home", "open", "sessions", or "new-session".
@@ -364,6 +372,31 @@ export component AppWindow inherits Window {
                             width: Theme.spacing;
                         }
                     }
+                    if root.study-timer && root.page-count > 0: Rectangle {
+                        y: (parent.height - self.height) / 2;
+                        height: 24px;
+                        width: timer-text.preferred-width + 16px;
+                        border-radius: Theme.radius;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        background: timer-touch.has-hover ? Theme.hover : transparent;
+
+                        timer-text := Text {
+                            text: root.study-paused ? "⏸ \{root.study-time}" : "⏱ \{root.study-time}";
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-small;
+                        }
+
+                        timer-touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.header-action("study-timer");
+                            }
+                        }
+                    }
+                    if root.study-timer && root.page-count > 0: Rectangle {
+                        width: Theme.spacing;
+                    }
                     Text {
                         text: root.page-count == 0 ? "" : root.status != "" ? root.status : root.page-label != "" ? "\{root.page-label} (\{root.current-page} / \{root.page-count})" : "\{root.current-page} / \{root.page-count}";
                         color: Theme.text-muted;
@@ -465,6 +498,11 @@ export component AppWindow inherits Window {
                         status: root.status;
                         sessions: root.sessions;
                         session-name: root.session-name;
+                        subjects: root.subjects;
+                        study-summary: root.study-summary;
+                        open-subject(i) => {
+                            root.open-subject(i);
+                        }
                         open-recent(i) => {
                             root.open-recent(i);
                         }

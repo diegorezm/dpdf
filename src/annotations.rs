@@ -72,6 +72,10 @@ pub struct Annotations {
     pub document: String,
     #[serde(default, rename = "annotation")]
     pub items: Vec<Annotation>,
+    /// Outline sections with a page, so the home screen can show
+    /// progress without opening the document.
+    #[serde(default)]
+    pub outline_sections: usize,
     #[serde(default, rename = "section")]
     pub sections: Vec<Section>,
 }

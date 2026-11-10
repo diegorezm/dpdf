@@ -16,12 +16,14 @@ use crate::keymap::{Action, Chord, KeyResult, Keymap};
 use crate::palette::{self, Entry, Target};
 use crate::pdf::{Event, Worker};
 use crate::store::{unique_name, Session, Store, DEFAULT_SESSION};
+use crate::study::{self, Clock, StudyLog};
 use crate::titlebar;
 use crate::update;
 use crate::viewer::PageBuffer;
 use crate::viewer::{file_name, to_color, ui_int, PopupOutcome, SidePanel, Viewer};
 use crate::{
-    AppWindow, KeyRow, PaletteItem, RecentItem, SettingsWindow, TabItem, Theme, ThemeCard,
+    AppWindow, KeyRow, PaletteItem, RecentItem, SettingsWindow, SubjectItem, TabItem, Theme,
+    ThemeCard,
 };
 
 const PALETTE_LIMIT: usize = 12;
@@ -55,6 +57,13 @@ pub struct App {
     prompt: Option<Prompt>,
     /// A newer release, while its prompt is open or it downloads.
     update: Option<update::Release>,
+
+    study: StudyLog,
+    clock: Clock,
+    /// Saves study time a little after it changes.
+    study_save: slint::Timer,
+    /// The study time shown in the header, to skip redundant updates.
+    study_shown: String,
 
     export_format: Format,
     /// Group Markdown exports by outline section.
@@ -97,6 +106,10 @@ impl App {
             session_items,
             prompt: None,
             update: None,
+            study: StudyLog::load(),
+            clock: Clock::default(),
+            study_save: slint::Timer::default(),
+            study_shown: String::new(),
             export_format: Format::Markdown,
             export_by_section: true,
             palette_entries: Vec::new(),
@@ -125,6 +138,7 @@ impl App {
 
     fn apply_config(&mut self, window: &AppWindow) {
         window.set_sidebar_button(self.config.sidebar_button);
+        window.set_study_timer(self.config.study_timer);
         let (keymap, key_problems) = Keymap::new(self.config.vim, &self.config.keys);
         self.keymap = keymap;
         let mut problems = self.problems.clone();
@@ -444,6 +458,17 @@ impl App {
                 let index = action.color_index().unwrap_or(0);
                 let outcome = self.viewer.color_key(window, index);
                 self.popup_outcome(window, outcome);
+            }
+            Action::ToggleStudyTimer => {
+                self.clock.paused = !self.clock.paused;
+                self.clock.reset();
+                window.set_study_paused(self.clock.paused);
+                let state = if self.clock.paused {
+                    "paused"
+                } else {
+                    "running"
+                };
+                self.flash(window, &format!("Study timer {state}"));
             }
             Action::MarkSection if self.viewer.page_count() > 0 => {
                 if !self.viewer.mark_current_section(window) {
@@ -828,6 +853,105 @@ impl App {
         self.session_items.set_vec(sessions);
         window.set_session_name(self.session_name().into());
         window.set_home(self.active.is_none());
+        if self.active.is_none() {
+            self.update_subjects(window);
+        }
+        self.clock.reset();
+        self.show_study_time(window);
+    }
+
+    // ----- Study time -------------------------------------------------------
+
+    /// Counts the time since the last activity toward the open document.
+    pub fn activity(&mut self, window: &AppWindow) {
+        if !self.config.study_timer {
+            return;
+        }
+        let Some(path) = self.viewer.path().map(Path::to_path_buf) else {
+            self.clock.reset();
+            return;
+        };
+        let seconds = self.clock.tick(crate::annotations::now());
+        if seconds == 0 {
+            return;
+        }
+        self.study.add(study::today(), &path, seconds);
+        self.show_study_time(window);
+        if !self.study_save.running() {
+            self.study_save.start(
+                slint::TimerMode::SingleShot,
+                std::time::Duration::from_secs(30),
+                || crate::with_app(|app| app.save_study()),
+            );
+        }
+    }
+
+    fn save_study(&self) {
+        // Losing a few seconds of study time isn't worth bothering about.
+        let _ = self.study.save();
+    }
+
+    fn show_study_time(&mut self, window: &AppWindow) {
+        let today = study::today();
+        let text = study::format_duration(self.study.total(today, today));
+        if text != self.study_shown {
+            window.set_study_time(text.as_str().into());
+            self.study_shown = text;
+        }
+    }
+
+    /// The home screen's list of the session's documents, with progress,
+    /// notes, and time.
+    fn update_subjects(&self, window: &AppWindow) {
+        let today = study::today();
+        let subjects: Vec<SubjectItem> = self
+            .tabs
+            .iter()
+            .enumerate()
+            .map(|(i, path)| {
+                let notes = crate::annotations::Annotations::load(path);
+                let (done, total) = (
+                    notes.sections.len().min(notes.outline_sections),
+                    notes.outline_sections,
+                );
+                let mut detail = Vec::new();
+                if total > 0 {
+                    detail.push(format!("{done} of {total} sections"));
+                }
+                detail.push(match notes.items.len() {
+                    1 => "1 note".to_owned(),
+                    n => format!("{n} notes"),
+                });
+                let time = self.study.for_path(path);
+                if time >= 60 {
+                    detail.push(study::format_duration(time));
+                }
+                SubjectItem {
+                    title: file_name(path).into(),
+                    detail: detail.join(" · ").into(),
+                    progress: if total == 0 {
+                        0.0
+                    } else {
+                        done as f32 / total as f32
+                    },
+                    has_progress: total > 0,
+                    active: Some(i) == self.active,
+                }
+            })
+            .collect();
+        window.set_subjects(Rc::new(VecModel::from(subjects)).into());
+        let mut summary = Vec::new();
+        if self.config.study_timer {
+            summary.push(format!(
+                "today {}",
+                study::format_duration(self.study.total(today, today))
+            ));
+            summary.push(format!(
+                "this week {}",
+                study::format_duration(self.study.total(today - 6, today))
+            ));
+        }
+        window.set_study_summary(summary.join(" · ").into());
     }
 
     // ----- Worker events ---------------------------------------------------
@@ -1212,6 +1336,7 @@ impl App {
     /// Saves positions and the session on exit.
     pub fn quit(&mut self) {
         self.viewer.remember_position();
+        self.save_study();
     }
 }
 

@@ -70,6 +70,15 @@ export struct RecentItem {
     folder: string,
 }
 
+// A document of the current session, on the home screen.
+export struct SubjectItem {
+    title: string,
+    detail: string,
+    progress: float,
+    has-progress: bool,
+    active: bool,
+}
+
 export struct TabItem {
     title: string,
     active: bool,
