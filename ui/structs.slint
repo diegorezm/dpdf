@@ -41,6 +41,8 @@ export struct ThumbView {
     height: length,
     image: image,
     loaded: bool,
+    // Colors of the page's annotations, at most three.
+    dots: [color],
 }
 
 // A row of the outline or notes panel.
@@ -51,6 +53,16 @@ export struct SideItem {
     color: color,
     has-color: bool,
     current: bool,
+    // Outline progress: -1 no box, 0 unread, 1 read, 2 and 3 reviewed.
+    status: int,
+}
+
+// A highlight color in the notes filter.
+export struct NoteFilter {
+    name: string,
+    color: color,
+    count: int,
+    on: bool,
 }
 
 export struct RecentItem {

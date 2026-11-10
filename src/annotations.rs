@@ -53,6 +53,18 @@ pub struct Annotation {
     pub rects: Vec<NormRect>,
 }
 
+/// How far the reader got with an outline section: 1 read, 2 reviewed
+/// once, 3 reviewed twice. Sections are matched by page and title, which
+/// stay the same as long as the PDF does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Section {
+    pub page: usize,
+    pub title: String,
+    pub level: u8,
+}
+
+pub const MAX_LEVEL: u8 = 3;
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Annotations {
     /// The document these belong to, for humans reading the file.
@@ -60,6 +72,8 @@ pub struct Annotations {
     pub document: String,
     #[serde(default, rename = "annotation")]
     pub items: Vec<Annotation>,
+    #[serde(default, rename = "section")]
+    pub sections: Vec<Section>,
 }
 
 impl Annotations {
@@ -72,7 +86,7 @@ impl Annotations {
 
     pub fn save(&self, doc: &Path) -> io::Result<()> {
         let path = file_for(doc).ok_or_else(|| io::Error::other("APPDATA is not set"))?;
-        if self.items.is_empty() {
+        if self.items.is_empty() && self.sections.is_empty() {
             return match fs::remove_file(&path) {
                 Err(err) if err.kind() != io::ErrorKind::NotFound => Err(err),
                 _ => Ok(()),
@@ -104,6 +118,35 @@ impl Annotations {
             rects,
         });
         id
+    }
+
+    pub fn level(&self, page: usize, title: &str) -> u8 {
+        self.sections
+            .iter()
+            .find(|s| s.page == page && s.title == title)
+            .map_or(0, |s| s.level)
+    }
+
+    /// Moves a section to the next level, wrapping back to unread.
+    pub fn cycle_level(&mut self, page: usize, title: &str) -> u8 {
+        let level = (self.level(page, title) + 1) % (MAX_LEVEL + 1);
+        self.sections
+            .retain(|s| !(s.page == page && s.title == title));
+        if level > 0 {
+            self.sections.push(Section {
+                page,
+                title: title.to_owned(),
+                level,
+            });
+        }
+        level
+    }
+
+    /// How many of `sections` (page, title) are read, and how many there are.
+    pub fn progress<'a>(&self, sections: impl Iterator<Item = (usize, &'a str)>) -> (usize, usize) {
+        sections.fold((0, 0), |(done, total), (page, title)| {
+            (done + usize::from(self.level(page, title) > 0), total + 1)
+        })
     }
 
     pub fn get_mut(&mut self, id: u64) -> Option<&mut Annotation> {
@@ -368,8 +411,9 @@ mod tests {
     fn toml_round_trip() {
         let mut a = Annotations {
             document: "C:\\a.pdf".into(),
-            items: Vec::new(),
+            ..Default::default()
         };
+        a.cycle_level(3, "Intro");
         a.add(
             0,
             Kind::Strikethrough,
@@ -381,6 +425,21 @@ mod tests {
         let text = toml::to_string(&a).unwrap();
         let back: Annotations = toml::from_str(&text).unwrap();
         assert_eq!(back.items, a.items);
+        assert_eq!(back.sections, a.sections);
+    }
+
+    #[test]
+    fn section_levels_cycle() {
+        let mut a = Annotations::default();
+        assert_eq!(a.level(1, "A"), 0);
+        assert_eq!(a.cycle_level(1, "A"), 1);
+        assert_eq!(a.cycle_level(1, "A"), 2);
+        assert_eq!(a.cycle_level(1, "A"), 3);
+        assert_eq!(a.cycle_level(1, "A"), 0);
+        assert!(a.sections.is_empty());
+        a.cycle_level(1, "A");
+        let outline = [(1, "A"), (1, "B"), (5, "C")];
+        assert_eq!(a.progress(outline.into_iter()), (1, 3));
     }
 
     #[test]

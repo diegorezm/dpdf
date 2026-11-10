@@ -111,6 +111,11 @@ pub struct Config {
     /// Folder that "Export notes" writes into without asking, e.g. a
     /// folder in an Obsidian vault. Empty asks where to save each time.
     pub notes_folder: String,
+    /// Shows study time in the header and records it per day.
+    pub study_timer: bool,
+    /// What each highlight color means, e.g. `red = "Trap"`. Shown in the
+    /// notes filter and used in exports.
+    pub color_names: BTreeMap<String, String>,
     /// Overrides: action name -> key sequences, e.g. `open = ["ctrl+o"]`.
     /// An empty list unbinds the action.
     pub keys: BTreeMap<String, Vec<String>>,
@@ -133,12 +138,38 @@ impl Default for Config {
             thumbnail_size: ThumbnailSize::Medium,
             vim: false,
             notes_folder: String::new(),
+            study_timer: true,
+            color_names: default_color_names(),
             keys: BTreeMap::new(),
         }
     }
 }
 
+/// Meanings that fit studying for exams; renamed in config.toml.
+fn default_color_names() -> BTreeMap<String, String> {
+    [
+        ("yellow", "Important"),
+        ("green", "Case law"),
+        ("blue", "Later"),
+        ("pink", "Definition"),
+        ("red", "Trap"),
+    ]
+    .into_iter()
+    .map(|(c, n)| (c.to_owned(), n.to_owned()))
+    .collect()
+}
+
 impl Config {
+    /// The name the user gave a highlight color, or the color itself.
+    pub fn color_name(&self, color: &str) -> String {
+        match self.color_names.get(color) {
+            Some(name) if !name.trim().is_empty() => name.trim().to_owned(),
+            _ => default_color_names()
+                .remove(color)
+                .unwrap_or_else(|| color.to_owned()),
+        }
+    }
+
     pub fn font_size(&self) -> f32 {
         if self.font_size.is_finite() {
             self.font_size.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE)
@@ -215,6 +246,10 @@ const CONFIG_HEADER: &str = "\
 #   first-page = [\"home\", \"g g\"]
 # Modifiers: ctrl, shift, alt. Separate sequence steps with a space.
 # See Settings > Keybindings for every action name.
+#
+# Highlight colors: [color_names] names what each color means, e.g.
+#   [color_names]
+#   red = \"Trap\"
 
 ";
 
@@ -473,5 +508,20 @@ mod tests {
         let partial: Config = toml::from_str("vim = true").unwrap();
         assert!(partial.vim);
         assert_eq!(partial.theme, "Graphite");
+        assert!(partial.study_timer);
+    }
+
+    #[test]
+    fn color_names_fall_back_to_defaults() {
+        let config: Config = toml::from_str(
+            "[color_names]
+red = \"Pegadinha\"
+green = \" \"",
+        )
+        .unwrap();
+        assert_eq!(config.color_name("red"), "Pegadinha");
+        assert_eq!(config.color_name("green"), "Case law");
+        assert_eq!(config.color_name("yellow"), "Important");
+        assert_eq!(config.color_name("teal"), "teal");
     }
 }

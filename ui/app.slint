@@ -1,12 +1,12 @@
 import { Theme } from "theme.slint";
-import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem } from "structs.slint";
-import { Panel, Field, TextButton, Icon } from "widgets.slint";
+import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter } from "structs.slint";
+import { Panel, Field, TextButton, Icon, Toggle, Button } from "widgets.slint";
 import { Sidebar, ReadingArea, StartScreen, TabBar } from "reader.slint";
 import { Palette } from "palette.slint";
 import { SettingsView } from "settings.slint";
 
 export { Theme }
-export { Highlight, Mark, PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem } from "structs.slint";
+export { Highlight, Mark, PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter } from "structs.slint";
 
 export component AppWindow inherits Window {
     title: root.page-count > 0 ? "\{root.document-title} — dpdf" : "dpdf";
@@ -44,6 +44,9 @@ export component AppWindow inherits Window {
     in property <[ThumbView]> thumbs;
     in property <string> side-panel: "thumbs";
     in property <[SideItem]> side-items;
+    in property <[NoteFilter]> note-filters;
+    in property <string> outline-progress-text;
+    in property <float> outline-progress;
     // The current page's label (e.g. "iv") when it differs from its number.
     in property <string> page-label;
     in property <bool> prompt-secret;
@@ -68,6 +71,12 @@ export component AppWindow inherits Window {
     in-out property <string> palette-query <=> palette.query;
     in-out property <string> note-text <=> note-input.text;
     in property <string> note-quote;
+    // Export sheet: "markdown", "anki", or "csv".
+    in property <string> export-format;
+    in property <bool> export-by-section;
+    in property <string> export-preview;
+    in property <string> export-count;
+    in property <bool> export-ready;
 
     // Selection / annotation popup: "", "selection", or "annotation".
     in property <string> popup;
@@ -93,6 +102,8 @@ export component AppWindow inherits Window {
     callback thumb-clicked(int);
     callback side-panel-clicked(string);
     callback side-item-clicked(int);
+    callback side-item-status-clicked(int);
+    callback note-filter-clicked(int);
     callback open-recent(int);
     callback open-session(int);
     callback prompt-accepted(string);
@@ -112,6 +123,9 @@ export component AppWindow inherits Window {
     // "note", "copy", or "delete".
     callback popup-action(string, int);
     callback note-saved();
+    // "format" (a format name) or "by-section" ("true" / "false").
+    callback export-option(string, string);
+    callback export-accepted();
     callback palette-edited(string);
     callback palette-moved(int);
     callback palette-accepted();
@@ -138,6 +152,8 @@ export component AppWindow inherits Window {
             prompt-input.select-all();
         } else if root.overlay == "note" {
             note-input.focus();
+        } else if root.overlay == "export" {
+            export-keys.focus();
         } else {
             keys.focus();
         }
@@ -379,6 +395,15 @@ export component AppWindow inherits Window {
                     viewport-y <=> root.thumbs-viewport-y;
                     mode: root.side-panel;
                     items: root.side-items;
+                    filters: root.note-filters;
+                    progress-text: root.outline-progress-text;
+                    progress: root.outline-progress;
+                    filter-clicked(i) => {
+                        root.note-filter-clicked(i);
+                    }
+                    status-clicked(i) => {
+                        root.side-item-status-clicked(i);
+                    }
                     clicked(page) => {
                         root.thumb-clicked(page);
                     }
@@ -561,15 +586,25 @@ export component AppWindow inherits Window {
                             spacing: 2px;
 
                             for c[i] in root.annotation-colors: Rectangle {
-                                width: 26px;
+                                width: 30px;
 
                                 Rectangle {
+                                    x: 3px;
                                     width: 16px;
                                     height: 16px;
                                     border-radius: 8px;
                                     background: c;
                                     border-width: swatch.has-hover ? 2px : 0;
                                     border-color: Theme.text;
+                                }
+
+                                // The color's key.
+                                Text {
+                                    x: 21px;
+                                    text: i + 1;
+                                    color: Theme.text-muted;
+                                    font-size: Theme.font-size-small - 2px;
+                                    vertical-alignment: center;
                                 }
 
                                 swatch := TouchArea {
@@ -692,6 +727,184 @@ export component AppWindow inherits Window {
                                 color: Theme.text-muted;
                                 font-size: Theme.font-size;
                                 vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    // Export notes: format, colors, and a preview of the file.
+                    Panel {
+                        visible: root.overlay == "export";
+                        x: (parent.width - self.width) / 2;
+                        y: parent.height * 0.1;
+                        width: min(parent.width - 32px, 560px);
+                        height: export-layout.preferred-height;
+
+                        export-keys := FocusScope {
+                            key-pressed(event) => {
+                                if event.text == Key.Return {
+                                    root.export-accepted();
+                                    return accept;
+                                }
+                                reject
+                            }
+
+                            export-layout := VerticalLayout {
+                                padding: 18px;
+                                spacing: 14px;
+
+                                HorizontalLayout {
+                                    Text {
+                                        text: "Export notes";
+                                        color: Theme.text;
+                                        font-size: Theme.font-size-large;
+                                        font-weight: 600;
+                                        horizontal-stretch: 1;
+                                    }
+                                    Text {
+                                        text: root.export-count;
+                                        color: Theme.text-muted;
+                                        font-size: Theme.font-size-small;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+
+                                    for f in [
+                                        { id: "markdown", label: "Markdown", detail: "summary by section" },
+                                        { id: "anki", label: "Anki", detail: "front · back · tags" },
+                                        { id: "csv", label: "CSV", detail: "any app" },
+                                    ]: Rectangle {
+                                        height: 52px;
+                                        horizontal-stretch: 1;
+                                        border-radius: Theme.radius;
+                                        border-width: 1px;
+                                        border-color: root.export-format == f.id ? Theme.accent : Theme.border;
+                                        background: format-touch.has-hover ? Theme.hover : transparent;
+
+                                        VerticalLayout {
+                                            alignment: center;
+                                            spacing: 2px;
+
+                                            Text {
+                                                text: f.label;
+                                                color: Theme.text;
+                                                font-size: Theme.font-size;
+                                                horizontal-alignment: center;
+                                            }
+                                            Text {
+                                                text: f.detail;
+                                                color: Theme.text-muted;
+                                                font-size: Theme.font-size-small;
+                                                horizontal-alignment: center;
+                                            }
+                                        }
+
+                                        format-touch := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => {
+                                                root.export-option("format", f.id);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // The notes filter's colors; the export follows them.
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    alignment: start;
+
+                                    for c[i] in root.note-filters: Rectangle {
+                                        height: 24px;
+                                        width: chip-row.preferred-width + 16px;
+                                        border-radius: 12px;
+                                        border-width: 1px;
+                                        border-color: c.on ? Theme.text-muted : Theme.border;
+                                        opacity: c.on ? 1 : 0.5;
+
+                                        chip-row := HorizontalLayout {
+                                            x: 8px;
+                                            spacing: 6px;
+
+                                            Rectangle {
+                                                y: (parent.height - self.height) / 2;
+                                                width: 8px;
+                                                height: 8px;
+                                                border-radius: 4px;
+                                                background: c.color;
+                                            }
+                                            Text {
+                                                text: c.name;
+                                                color: Theme.text;
+                                                font-size: Theme.font-size-small;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => {
+                                                root.note-filter-clicked(i);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if root.export-format == "markdown": HorizontalLayout {
+                                    spacing: 10px;
+
+                                    Toggle {
+                                        checked: root.export-by-section;
+                                        toggled => {
+                                            root.export-option("by-section", root.export-by-section ? "false" : "true");
+                                        }
+                                    }
+                                    Text {
+                                        text: "Group by outline section and color";
+                                        color: Theme.text;
+                                        font-size: Theme.font-size-small;
+                                        vertical-alignment: center;
+                                        horizontal-stretch: 1;
+                                    }
+                                }
+
+                                Rectangle {
+                                    height: 180px;
+                                    border-radius: Theme.radius;
+                                    background: Theme.surface;
+                                    clip: true;
+
+                                    Text {
+                                        x: 12px;
+                                        y: 10px;
+                                        width: parent.width - 24px;
+                                        text: root.export-ready ? root.export-preview : "No notes in the chosen colors";
+                                        color: Theme.text-muted;
+                                        font-family: "Cascadia Mono, Consolas";
+                                        font-size: Theme.font-size-small;
+                                        wrap: no-wrap;
+                                        overflow: elide;
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    Text {
+                                        text: root.export-format == "anki" ? "In Anki: File › Import. The note becomes the front, the quote the back." : "Enter to save · Esc to close";
+                                        color: Theme.text-muted;
+                                        font-size: Theme.font-size-small;
+                                        vertical-alignment: center;
+                                        horizontal-stretch: 1;
+                                        wrap: word-wrap;
+                                    }
+                                    Button {
+                                        text: "Save…";
+                                        primary: true;
+                                        clicked => {
+                                            root.export-accepted();
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

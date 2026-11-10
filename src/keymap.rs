@@ -71,14 +71,34 @@ actions! {
     Copy => "copy", "Copy selected text";
     Highlight => "highlight", "Highlight selection";
     AddNote => "add-note", "Add note to selection";
+    MarkSection => "mark-section", "Mark current section read / reviewed";
+    Color1 => "color-1", "Highlight with color 1";
+    Color2 => "color-2", "Highlight with color 2";
+    Color3 => "color-3", "Highlight with color 3";
+    Color4 => "color-4", "Highlight with color 4";
+    Color5 => "color-5", "Highlight with color 5";
     Undo => "undo", "Undo annotation change";
     Redo => "redo", "Redo annotation change";
-    ExportNotes => "export-notes", "Export notes as Markdown…";
+    ExportNotes => "export-notes", "Export notes (Markdown, Anki, CSV)…";
     ReloadConfig => "reload-config", "Reload config and themes";
     OpenConfig => "open-config", "Open config.toml";
     OpenThemesFolder => "open-themes-folder", "Open themes folder";
     CheckForUpdates => "check-for-updates", "Check for updates";
     Escape => "escape", "Close overlay / clear selection";
+}
+
+impl Action {
+    /// The highlight color a `ColorN` action picks, from zero.
+    pub fn color_index(self) -> Option<usize> {
+        const COLORS: [Action; 5] = [
+            Action::Color1,
+            Action::Color2,
+            Action::Color3,
+            Action::Color4,
+            Action::Color5,
+        ];
+        COLORS.iter().position(|a| *a == self)
+    }
 }
 
 const DEFAULT_KEYS: &[(Action, &str)] = &[
@@ -117,9 +137,16 @@ const DEFAULT_KEYS: &[(Action, &str)] = &[
     (Action::Copy, "ctrl+c"),
     (Action::Highlight, "ctrl+h"),
     (Action::AddNote, "ctrl+n"),
+    (Action::MarkSection, "ctrl+l"),
+    (Action::Color1, "1"),
+    (Action::Color2, "2"),
+    (Action::Color3, "3"),
+    (Action::Color4, "4"),
+    (Action::Color5, "5"),
     (Action::Undo, "ctrl+z"),
     (Action::Redo, "ctrl+y"),
     (Action::Redo, "ctrl+shift+z"),
+    (Action::ExportNotes, "ctrl+e"),
     (Action::ExportNotes, "ctrl+shift+e"),
     (Action::Escape, "escape"),
 ];
@@ -448,6 +475,9 @@ mod tests {
         assert_eq!(press(&mut km, "o", true, false), Some(Action::Open));
         assert_eq!(press(&mut km, "O", true, true), Some(Action::ShowOutline));
         assert_eq!(press(&mut km, "Q", true, true), None);
+        assert_eq!(press(&mut km, "3", false, false), Some(Action::Color3));
+        assert_eq!(Action::Color3.color_index(), Some(2));
+        assert_eq!(Action::Open.color_index(), None);
         assert_eq!(
             press(&mut km, &key(Key::PageDown), false, false),
             Some(Action::NextPage)

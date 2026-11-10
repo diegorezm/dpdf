@@ -11,6 +11,7 @@ use crate::config::{
     self, built_in_themes, load_themes, Config, Corners, DefaultZoom, Density, PageColors,
     ThemeDef, ThumbnailSize,
 };
+use crate::export::Format;
 use crate::keymap::{Action, Chord, KeyResult, Keymap};
 use crate::palette::{self, Entry, Target};
 use crate::pdf::{Event, Worker};
@@ -24,6 +25,8 @@ use crate::{
 };
 
 const PALETTE_LIMIT: usize = 12;
+/// Lines of the export shown in the export sheet.
+const EXPORT_PREVIEW_LINES: usize = 14;
 
 #[derive(Clone)]
 enum Prompt {
@@ -52,6 +55,10 @@ pub struct App {
     prompt: Option<Prompt>,
     /// A newer release, while its prompt is open or it downloads.
     update: Option<update::Release>,
+
+    export_format: Format,
+    /// Group Markdown exports by outline section.
+    export_by_section: bool,
 
     palette_entries: Vec<Entry>,
     palette_shown: Vec<Entry>,
@@ -90,6 +97,8 @@ impl App {
             session_items,
             prompt: None,
             update: None,
+            export_format: Format::Markdown,
+            export_by_section: true,
             palette_entries: Vec::new(),
             palette_shown: Vec::new(),
             palette_selected: 0,
@@ -206,6 +215,11 @@ impl App {
 
         self.update_key_rows();
 
+        let names = crate::annotations::COLORS
+            .iter()
+            .map(|(color, _)| self.config.color_name(color))
+            .collect();
+        self.viewer.set_color_names(names);
         self.viewer.set_default_zoom(self.config.default_zoom);
         self.viewer
             .set_inverted(window, self.config.page_colors == PageColors::Inverted);
@@ -425,6 +439,16 @@ impl App {
             Action::Copy | Action::Highlight | Action::AddNote => {
                 let outcome = self.viewer.selection_action(window, action);
                 self.popup_outcome(window, outcome);
+            }
+            Action::Color1 | Action::Color2 | Action::Color3 | Action::Color4 | Action::Color5 => {
+                let index = action.color_index().unwrap_or(0);
+                let outcome = self.viewer.color_key(window, index);
+                self.popup_outcome(window, outcome);
+            }
+            Action::MarkSection if self.viewer.page_count() > 0 => {
+                if !self.viewer.mark_current_section(window) {
+                    self.flash(window, "This document has no outline");
+                }
             }
             Action::Undo | Action::Redo => {
                 if !self.viewer.undo(window, action == Action::Redo) {
@@ -901,13 +925,74 @@ impl App {
         self.set_overlay(window, "");
     }
 
+    /// Opens the export sheet for the current document.
     fn export_notes(&mut self, window: &AppWindow) {
-        let Some(markdown) = self.viewer.notes_markdown() else {
-            window.set_status("No notes in this document yet".into());
-            clear_status_later(window);
+        if self.viewer.page_count() == 0 {
             return;
-        };
-        let name = format!("{}.md", safe_file_name(self.viewer.title()));
+        }
+        if !self.viewer.has_notes() {
+            self.flash(window, "No notes in this document yet");
+            return;
+        }
+        self.update_export(window);
+        self.set_overlay(window, "export");
+    }
+
+    fn update_export(&self, window: &AppWindow) {
+        let (text, count) = self
+            .viewer
+            .export(self.export_format, self.export_by_section);
+        let preview: Vec<&str> = text.lines().take(EXPORT_PREVIEW_LINES).collect();
+        let mut preview = preview.join("\n");
+        if text.lines().count() > EXPORT_PREVIEW_LINES {
+            preview.push_str("\n…");
+        }
+        window.set_export_format(self.export_format.name().into());
+        window.set_export_by_section(self.export_by_section);
+        window.set_export_preview(preview.into());
+        window.set_export_count(
+            match count {
+                1 => "1 note".to_owned(),
+                n => format!("{n} notes"),
+            }
+            .into(),
+        );
+        window.set_export_ready(count > 0);
+    }
+
+    /// A choice in the export sheet: "format" or "by-section".
+    pub fn export_option(&mut self, window: &AppWindow, key: &str, value: &str) {
+        match key {
+            "format" => {
+                if let Some(format) = Format::from_name(value) {
+                    self.export_format = format;
+                }
+            }
+            "by-section" => self.export_by_section = value == "true",
+            _ => return,
+        }
+        self.update_export(window);
+    }
+
+    /// A color toggled in the notes filter, which the export follows.
+    pub fn note_filter_clicked(&mut self, window: &AppWindow, index: usize) {
+        self.viewer.note_filter_clicked(index);
+        if window.get_overlay() == "export" {
+            self.update_export(window);
+        }
+    }
+
+    pub fn export_accepted(&mut self, window: &AppWindow) {
+        let format = self.export_format;
+        let (text, count) = self.viewer.export(format, self.export_by_section);
+        if count == 0 {
+            return;
+        }
+        let name = format!(
+            "{}.{}",
+            safe_file_name(self.viewer.title()),
+            format.extension()
+        );
         // A configured folder (an Obsidian vault) is written without
         // asking; re-exporting replaces the file with the current notes.
         let folder = self.config.notes_folder.trim();
@@ -915,19 +1000,20 @@ impl App {
             rfd::FileDialog::new()
                 .set_title("Export notes")
                 .set_file_name(&name)
-                .add_filter("Markdown", &["md"])
+                .add_filter(format.label(), &[format.extension()])
                 .save_file()
         } else {
             Some(std::path::Path::new(folder).join(&name))
         };
-        if let Some(path) = target {
-            let message = match std::fs::write(&path, markdown) {
-                Ok(()) => format!("Notes exported to {}", file_name(&path)),
-                Err(err) => format!("Couldn't export notes: {err}"),
-            };
-            window.set_status(message.into());
-            clear_status_later(window);
-        }
+        let Some(path) = target else {
+            return;
+        };
+        self.set_overlay(window, "");
+        let message = match std::fs::write(&path, text) {
+            Ok(()) => format!("Notes exported to {}", file_name(&path)),
+            Err(err) => format!("Couldn't export notes: {err}"),
+        };
+        self.flash(window, &message);
     }
 
     // ----- Command palette -------------------------------------------------

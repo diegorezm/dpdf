@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { PageView, ThumbView, RecentItem, TabItem, SideItem } from "structs.slint";
+import { PageView, ThumbView, RecentItem, TabItem, SideItem, NoteFilter } from "structs.slint";
 import { Button, Icon, TextButton } from "widgets.slint";
 
 // Page thumbnails, the outline, or the notes list. Rust positions only
@@ -12,7 +12,13 @@ export component Sidebar inherits Rectangle {
     // "thumbs", "outline", or "notes".
     in property <string> mode;
     in property <[SideItem]> items;
+    in property <[NoteFilter]> filters;
+    // Outline progress, e.g. "4 of 9 sections", and its fraction.
+    in property <string> progress-text;
+    in property <float> progress;
     callback clicked(int);
+    callback filter-clicked(int);
+    callback status-clicked(int);
     callback mode-clicked(string);
     callback item-clicked(int);
     callback close-clicked();
@@ -61,8 +67,87 @@ export component Sidebar inherits Rectangle {
             padding: 6px;
             alignment: start;
 
+            if root.mode == "outline" && root.progress-text != "": VerticalLayout {
+                padding: 6px;
+                padding-bottom: 10px;
+                spacing: 5px;
+
+                HorizontalLayout {
+                    Text {
+                        text: root.progress-text;
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size-small;
+                        horizontal-stretch: 1;
+                    }
+                    Text {
+                        text: "\{round(root.progress * 100)}%";
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size-small;
+                    }
+                }
+                Rectangle {
+                    height: 3px;
+                    border-radius: 1.5px;
+                    background: Theme.border;
+
+                    Rectangle {
+                        x: 0;
+                        width: parent.width * root.progress;
+                        border-radius: 1.5px;
+                        background: Theme.accent;
+                    }
+                }
+            }
+
+            // Which highlight colors the list shows.
+            if root.mode == "notes": VerticalLayout {
+                padding-bottom: 6px;
+
+                for f[i] in root.filters: Rectangle {
+                    height: 22px;
+                    border-radius: Theme.radius;
+                    background: filter-touch.has-hover ? Theme.hover : transparent;
+                    opacity: f.on ? 1 : 0.45;
+
+                    HorizontalLayout {
+                        padding-left: 6px;
+                        padding-right: 6px;
+                        spacing: 8px;
+
+                        Rectangle {
+                            y: (parent.height - self.height) / 2;
+                            width: 8px;
+                            height: 8px;
+                            border-radius: 4px;
+                            background: f.color;
+                        }
+                        Text {
+                            text: f.name;
+                            color: Theme.text;
+                            font-size: Theme.font-size-small;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: f.count;
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-small;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    filter-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.filter-clicked(i);
+                        }
+                    }
+                }
+            }
+
             if root.items.length == 0: Text {
-                text: root.mode == "outline" ? "No outline" : "No notes yet";
+                text: root.mode == "outline" ? "No outline" : root.filters.length > 0 ? "No notes in these colors" : "No notes yet";
                 color: Theme.text-muted;
                 font-size: Theme.font-size-small;
                 horizontal-alignment: center;
@@ -81,6 +166,31 @@ export component Sidebar inherits Rectangle {
                         width: 3px;
                         border-radius: 1.5px;
                         background: item.color;
+                    }
+                    if item.status >= 0: Rectangle {
+                        width: 14px;
+                        height: 14px;
+                        y: 2px;
+                        border-radius: 4px;
+                        border-width: item.status == 0 ? 1px : 0;
+                        border-color: status-touch.has-hover ? Theme.text-muted : Theme.border;
+                        background: item.status == 0 ? transparent : item.status == 1 ? Theme.accent : Theme.accent.mix(Theme.text, 0.5);
+
+                        Text {
+                            text: item.status == 0 ? "" : item.status == 1 ? "✓" : item.status == 2 ? "2" : "3";
+                            color: Theme.background;
+                            font-size: 10px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        status-touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.status-clicked(i);
+                            }
+                        }
                     }
                     VerticalLayout {
                         horizontal-stretch: 1;
@@ -138,6 +248,15 @@ export component Sidebar inherits Rectangle {
                 border-radius: 3px;
                 border-width: 2px;
                 border-color: thumb.page == root.current-page ? Theme.accent : transparent;
+            }
+
+            for dot[i] in thumb.dots: Rectangle {
+                x: parent.width + 4px;
+                y: 6px + i * 10px;
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                background: dot;
             }
 
             TouchArea {

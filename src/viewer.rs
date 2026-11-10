@@ -2,7 +2,7 @@
 //! hits, the text selection, and annotations into Slint properties, and
 //! decides which pages and thumbnails to render or evict.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -14,13 +14,14 @@ use slint::{
 use crate::annotations::{self, Annotations, History, Kind};
 use crate::cache::PageCache;
 use crate::config::{parse_color, DefaultZoom};
+use crate::export;
 use crate::keymap::Action;
 use crate::layout::{self, Layout, Zoom};
 use crate::nav;
 use crate::pdf::{Bitmap, LinkTarget, NormRect, OutlineItem, Request, SelectionPart, Worker};
 use crate::search::SearchState;
 use crate::store::{Recent, Store};
-use crate::{AppWindow, Highlight, Mark, PageView, RecentItem, SideItem, ThumbView};
+use crate::{AppWindow, Highlight, Mark, NoteFilter, PageView, RecentItem, SideItem, ThumbView};
 
 /// Pages rendered ahead of and behind the visible ones.
 const PRELOAD: usize = 2;
@@ -178,6 +179,13 @@ pub struct Viewer {
     side_items: Rc<VecModel<SideItem>>,
     /// The page each side item jumps to.
     side_pages: Vec<usize>,
+    /// The outline entry of each side item, in the outline panel.
+    side_outline: Vec<usize>,
+    /// What each highlight color means, in `annotations::COLORS` order.
+    color_names: Vec<String>,
+    /// Colors the notes list leaves out.
+    hidden_colors: HashSet<String>,
+    note_filters: Rc<VecModel<NoteFilter>>,
     /// Set while the window is being resized: keep showing stretched
     /// pages instead of rendering every intermediate size.
     renders_held: bool,
@@ -196,6 +204,8 @@ impl Viewer {
         window.set_recent(recent.clone().into());
         let side_items = Rc::new(VecModel::default());
         window.set_side_items(side_items.clone().into());
+        let note_filters = Rc::new(VecModel::default());
+        window.set_note_filters(note_filters.clone().into());
         let colors: Vec<Color> = annotations::COLORS
             .iter()
             .map(|(_, hex)| to_color(hex))
@@ -242,6 +252,13 @@ impl Viewer {
             side_panel: SidePanel::Thumbs,
             side_items,
             side_pages: Vec::new(),
+            side_outline: Vec::new(),
+            color_names: annotations::COLORS
+                .iter()
+                .map(|(name, _)| (*name).to_owned())
+                .collect(),
+            hidden_colors: HashSet::new(),
+            note_filters,
             passwords: HashMap::new(),
             renders_held: false,
         };
@@ -400,6 +417,7 @@ impl Viewer {
         self.remember_position();
         self.update_recent();
         self.update_side_items();
+        self.update_progress(window);
     }
 
     fn reset_document_state(&mut self, window: &AppWindow) {
@@ -665,7 +683,19 @@ impl Viewer {
             height: rect.height,
             loaded: image.is_some(),
             image: image.unwrap_or_default(),
+            dots: self.page_dots(page),
         })
+    }
+
+    /// The distinct annotation colors on a page, in palette order.
+    fn page_dots(&self, page: usize) -> ModelRc<Color> {
+        let colors: Vec<Color> = annotations::COLORS
+            .iter()
+            .filter(|(name, _)| self.annotations.on_page(page).any(|a| a.color == *name))
+            .take(3)
+            .map(|(_, hex)| to_color(hex))
+            .collect();
+        model_or_default(colors)
     }
 
     pub fn sidebar_shown(&mut self, window: &AppWindow) {
@@ -841,6 +871,7 @@ impl Viewer {
     }
 
     fn update_side_items(&mut self) {
+        self.side_outline.clear();
         let (items, pages): (Vec<SideItem>, Vec<usize>) = match self.side_panel {
             SidePanel::Thumbs => Default::default(),
             SidePanel::Outline => {
@@ -853,16 +884,20 @@ impl Viewer {
                     .filter(|(_, page)| *page <= self.current_page)
                     .max_by_key(|(_, page)| *page)
                     .map(|(i, _)| i);
+                let annotations = &self.annotations;
+                let side_outline = &mut self.side_outline;
                 self.outline
                     .iter()
                     .enumerate()
                     .filter_map(|(i, item)| {
                         let page = item.page?;
+                        side_outline.push(i);
                         let row = SideItem {
                             title: item.title.as_str().into(),
                             detail: "".into(),
                             depth: ui_int(item.depth.min(6)),
                             current: current == Some(i),
+                            status: i32::from(annotations.level(page, &item.title)),
                             ..Default::default()
                         };
                         Some((row, page))
@@ -870,7 +905,12 @@ impl Viewer {
                     .unzip()
             }
             SidePanel::Notes => {
-                let mut notes: Vec<_> = self.annotations.items.iter().collect();
+                let mut notes: Vec<_> = self
+                    .annotations
+                    .items
+                    .iter()
+                    .filter(|a| !self.hidden_colors.contains(&a.color))
+                    .collect();
                 notes.sort_by(|a, b| {
                     a.page.cmp(&b.page).then_with(|| {
                         let y = |n: &annotations::Annotation| n.rects.first().map_or(0.0, |r| r.y);
@@ -893,6 +933,7 @@ impl Viewer {
                             color: to_color(annotations::color_hex(&a.color)),
                             has_color: true,
                             current: false,
+                            status: -1,
                         };
                         (row, a.page)
                     })
@@ -901,6 +942,131 @@ impl Viewer {
         };
         self.side_items.set_vec(items);
         self.side_pages = pages;
+        self.update_note_filters();
+    }
+
+    /// The colors used in this document, with counts, for the notes filter.
+    fn update_note_filters(&self) {
+        let filters: Vec<NoteFilter> = annotations::COLORS
+            .iter()
+            .zip(&self.color_names)
+            .filter_map(|((color, hex), name)| {
+                let count = self
+                    .annotations
+                    .items
+                    .iter()
+                    .filter(|a| a.color == *color)
+                    .count();
+                (count > 0).then(|| NoteFilter {
+                    name: name.as_str().into(),
+                    color: to_color(hex),
+                    count: ui_int(count),
+                    on: !self.hidden_colors.contains(*color),
+                })
+            })
+            .collect();
+        self.note_filters.set_vec(filters);
+    }
+
+    pub fn set_color_names(&mut self, names: Vec<String>) {
+        self.color_names = names;
+        self.update_side_items();
+    }
+
+    /// Shows or hides a color in the notes list; `index` counts only the
+    /// colors in use, like the filter rows.
+    pub fn note_filter_clicked(&mut self, index: usize) {
+        let used: Vec<&str> = annotations::COLORS
+            .iter()
+            .map(|(name, _)| *name)
+            .filter(|name| self.annotations.items.iter().any(|a| a.color == *name))
+            .collect();
+        if let Some(color) = used.get(index) {
+            if !self.hidden_colors.remove(*color) {
+                self.hidden_colors.insert((*color).to_owned());
+            }
+        }
+        self.update_side_items();
+    }
+
+    pub fn has_notes(&self) -> bool {
+        !self.annotations.items.is_empty()
+    }
+
+    /// Colors the notes list currently shows.
+    pub fn shown_colors(&self) -> Vec<String> {
+        annotations::COLORS
+            .iter()
+            .map(|(name, _)| (*name).to_owned())
+            .filter(|name| !self.hidden_colors.contains(name))
+            .collect()
+    }
+
+    /// Advances an outline section's progress from its checkbox.
+    pub fn side_item_status_clicked(&mut self, window: &AppWindow, index: usize) {
+        if let Some(&i) = self.side_outline.get(index) {
+            self.cycle_section(window, i);
+        }
+    }
+
+    /// Advances the progress of the section the reader is in.
+    pub fn mark_current_section(&mut self, window: &AppWindow) -> bool {
+        let current = self
+            .outline
+            .iter()
+            .enumerate()
+            .filter_map(|(i, item)| Some((i, item.page?)))
+            .filter(|(_, page)| *page <= self.current_page)
+            .max_by_key(|(_, page)| *page)
+            .map(|(i, _)| i);
+        match current {
+            Some(i) => {
+                self.cycle_section(window, i);
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn cycle_section(&mut self, window: &AppWindow, outline_index: usize) {
+        let Some((Some(page), title)) = self
+            .outline
+            .get(outline_index)
+            .map(|item| (item.page, item.title.clone()))
+        else {
+            return;
+        };
+        self.annotations.cycle_level(page, &title);
+        self.save_annotations(window);
+        self.update_side_items();
+        self.update_progress(window);
+    }
+
+    /// The outline sections that count toward progress: those with a page.
+    fn sections(&self) -> impl Iterator<Item = (usize, &str)> {
+        self.outline
+            .iter()
+            .filter_map(|item| Some((item.page?, item.title.as_str())))
+    }
+
+    /// How many sections are read and how many there are.
+    pub fn progress(&self) -> (usize, usize) {
+        self.annotations.progress(self.sections())
+    }
+
+    fn update_progress(&self, window: &AppWindow) {
+        let (done, total) = self.progress();
+        let text = match total {
+            0 => String::new(),
+            1 => format!("{done} of 1 section"),
+            _ => format!("{done} of {total} sections"),
+        };
+        window.set_outline_progress_text(text.into());
+        window.set_outline_progress(if total == 0 {
+            0.0
+        } else {
+            done as f32 / total as f32
+        });
     }
 
     pub fn side_item_clicked(&mut self, window: &AppWindow, index: usize) {
@@ -1217,6 +1383,19 @@ impl Viewer {
         PopupOutcome::Nothing
     }
 
+    /// A color key: highlights the selection, or recolors the clicked
+    /// annotation, with color `index`.
+    pub fn color_key(&mut self, window: &AppWindow, index: usize) -> PopupOutcome {
+        match self.popup {
+            Popup::Annotation(_) => self.popup_action(window, "color", index),
+            _ if self.selection.is_some() => {
+                self.popup = Popup::Selection;
+                self.popup_action(window, "highlight", index)
+            }
+            _ => PopupOutcome::Nothing,
+        }
+    }
+
     /// Keyboard shortcuts for the selection (Copy, Highlight, AddNote).
     pub fn selection_action(&mut self, window: &AppWindow, action: Action) -> PopupOutcome {
         if self.selection.is_none() {
@@ -1312,8 +1491,11 @@ impl Viewer {
     }
 
     fn save_annotations(&mut self, window: &AppWindow) {
-        if self.side_panel == SidePanel::Notes {
-            self.update_side_items();
+        match self.side_panel {
+            SidePanel::Notes => self.update_side_items(),
+            // Thumbnails show which colors each page has.
+            SidePanel::Thumbs => self.update_thumbs(window, true),
+            SidePanel::Outline => {}
         }
         let Some(path) = self.path.clone() else {
             return;
@@ -1324,18 +1506,30 @@ impl Viewer {
         }
     }
 
-    /// The document's notes as Markdown, if it has any.
-    pub fn notes_markdown(&self) -> Option<String> {
+    /// The notes in the shown colors as `format`, and how many there are.
+    pub fn export(&self, format: export::Format, by_section: bool) -> (String, usize) {
         let file = self
             .path
             .as_deref()
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        (!self.annotations.items.is_empty()).then(|| {
-            self.annotations
-                .to_markdown(&self.title, &file, annotations::now())
-        })
+        let colors = self.shown_colors();
+        let sections: Vec<(usize, String)> = self
+            .sections()
+            .map(|(page, title)| (page, title.to_owned()))
+            .collect();
+        let opts = export::Options {
+            title: &self.title,
+            file: &file,
+            exported: annotations::now(),
+            colors: &colors,
+            names: &self.color_names,
+            sections: &sections,
+            by_section,
+        };
+        let count = export::selected(&self.annotations, &opts).len();
+        (export::export(&self.annotations, format, &opts), count)
     }
 
     /// Converts a reader point to a page and a point in page fractions.

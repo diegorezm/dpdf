@@ -5,6 +5,7 @@ mod annotations;
 mod app;
 mod cache;
 mod config;
+mod export;
 mod keymap;
 mod layout;
 mod nav;
@@ -158,6 +159,11 @@ fn main() -> Result<(), slint::PlatformError> {
     on!(window.on_side_item_clicked, |app, win, i| app
         .viewer()
         .side_item_clicked(&win, index(i)));
+    on!(window.on_side_item_status_clicked, |app, win, i| app
+        .viewer()
+        .side_item_status_clicked(&win, index(i)));
+    on!(window.on_note_filter_clicked, |app, win, i| app
+        .note_filter_clicked(&win, index(i)));
     on!(window.on_thumb_clicked, |app, win, page| app
         .viewer()
         .go_to_page(&win, index(page)));
@@ -208,6 +214,10 @@ fn main() -> Result<(), slint::PlatformError> {
     on!(window.on_update_action, |app, win, action| app
         .update_action(&win, &action));
     on!(window.on_note_saved, |app, win| app.note_saved(&win));
+    on!(window.on_export_option, |app, win, key, value| app
+        .export_option(&win, &key, &value));
+    on!(window.on_export_accepted, |app, win| app
+        .export_accepted(&win));
     on!(window.on_palette_edited, |app, win, text| app
         .palette_edited(&win, &text));
     on!(window.on_palette_moved, |app, win, delta| app
