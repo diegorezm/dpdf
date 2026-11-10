@@ -213,6 +213,86 @@ export component Icon inherits Path {
         : root.name == "plus" ? "M12 5v14 M5 12h14"
         : root.name == "session" ? "M12 3l9 5-9 5-9-5z M3 13l9 5 9-5"
         : root.name == "pdf" ? "M6 2h9l5 5v15H6z M14 2v6h6"
+        : root.name == "fit-width" ? "M3 12h18 M7 8l-4 4 4 4 M17 8l4 4-4 4"
+        : root.name == "fit-page" ? "M6 3h12v18H6z"
+        : root.name == "zoom-in" ? "M11 5a6 6 0 1 0 0.01 0z M8 11h6 M11 8v6 M20 20l-4.5-4.5"
+        : root.name == "zoom-out" ? "M11 5a6 6 0 1 0 0.01 0z M8 11h6 M20 20l-4.5-4.5"
+        : root.name == "settings" ? "M12 9a3 3 0 1 0 0.01 0z M12 2v3 M12 19v3 M2 12h3 M19 12h3 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2"
+        : root.name == "close" ? "M6 6l12 12 M18 6L6 18"
         : "";
 }
 
+
+// Header icon button; its name and shortcut appear below it on hover.
+export component IconButton inherits Rectangle {
+    in property <string> icon;
+    in property <string> tip;
+    in property <string> shortcut;
+    in property <bool> active;
+    callback clicked();
+
+    width: 30px;
+    height: 28px;
+    border-radius: Theme.radius;
+    background: touch.has-hover ? Theme.hover : transparent;
+
+    Icon {
+        name: root.icon;
+        color: root.active ? Theme.accent : touch.has-hover ? Theme.text : Theme.text-muted;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    // Waits a moment so passing the mouse over the header stays quiet.
+    property <bool> show-tip: false;
+    Timer {
+        interval: 400ms;
+        running: touch.has-hover && !root.show-tip;
+        triggered => {
+            root.show-tip = true;
+        }
+    }
+    property <bool> hovered: touch.has-hover;
+    changed hovered => {
+        if !self.hovered {
+            self.show-tip = false;
+        }
+    }
+
+    if root.show-tip && touch.has-hover: Rectangle {
+        y: root.height + 6px;
+        // Right-aligned: the header's buttons sit at the window's right edge.
+        x: root.width - self.width;
+        width: tip-row.preferred-width + 16px;
+        height: 26px;
+        border-radius: Theme.radius;
+        border-width: 1px;
+        border-color: Theme.border;
+        background: Theme.raised;
+
+        tip-row := HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 8px;
+
+            Text {
+                text: root.tip;
+                color: Theme.text;
+                font-size: Theme.font-size-small;
+                vertical-alignment: center;
+            }
+            if root.shortcut != "": Text {
+                text: root.shortcut;
+                color: Theme.text-muted;
+                font-size: Theme.font-size-small;
+                font-family: "Consolas";
+                vertical-alignment: center;
+            }
+        }
+    }
+}

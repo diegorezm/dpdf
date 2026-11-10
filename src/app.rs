@@ -178,6 +178,24 @@ impl App {
         window.set_study_timer(self.config.study_timer);
         let (keymap, key_problems) = Keymap::new(self.config.vim, &self.config.keys);
         self.keymap = keymap;
+        let header_keys: Vec<slint::SharedString> = [
+            Action::FitWidth,
+            Action::FitPage,
+            Action::ZoomOut,
+            Action::ZoomIn,
+            Action::Settings,
+        ]
+        .iter()
+        .map(|a| {
+            self.keymap
+                .keys_for(*a)
+                .first()
+                .cloned()
+                .unwrap_or_default()
+                .into()
+        })
+        .collect();
+        window.set_header_keys(Rc::new(VecModel::from(header_keys)).into());
         let mut problems = self.problems.clone();
         problems.extend(key_problems);
 
@@ -638,6 +656,10 @@ impl App {
             return;
         }
         if self.viewer.clear_selection(window) {
+            return;
+        }
+        if !window.get_status().is_empty() {
+            window.set_status("".into());
             return;
         }
         if window.get_fullscreen() {

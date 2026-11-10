@@ -1,6 +1,6 @@
 import { Theme } from "theme.slint";
 import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter, SubjectItem, HighlightRow } from "structs.slint";
-import { Panel, Field, TextButton, Icon, Toggle, Button } from "widgets.slint";
+import { Panel, Field, TextButton, Icon, IconButton, Toggle, Button } from "widgets.slint";
 import { Sidebar, ReadingArea, StartScreen, TabBar } from "reader.slint";
 import { Palette } from "palette.slint";
 import { SettingsView } from "settings.slint";
@@ -26,7 +26,11 @@ export component AppWindow inherits Window {
     in property <string> document-title;
     in property <int> current-page: 0;
     in property <int> page-count: 0;
-    in property <string> status;
+    // Notification in the bottom-right corner; Rust clears it.
+    in-out property <string> status;
+    // Shortcuts shown in header tooltips: fit width, fit page, zoom out,
+    // zoom in, settings.
+    in property <[string]> header-keys;
     in property <int> zoom-percent: 100;
     // "fit-width", "fit-page", or "custom".
     in property <string> zoom-mode: "fit-width";
@@ -179,6 +183,8 @@ export component AppWindow inherits Window {
 
         VerticalLayout {
             if root.chrome: Rectangle {
+                // Above the reader, so tooltips can hang over it.
+                z: 1;
                 height: Theme.header-height;
                 background: Theme.background;
 
@@ -328,17 +334,21 @@ export component AppWindow inherits Window {
                         spacing: 2px;
                         horizontal-stretch: 0;
 
-                        TextButton {
+                        IconButton {
                             y: (parent.height - self.height) / 2;
-                            text: @tr("Fit width");
+                            icon: "fit-width";
+                            tip: @tr("Fit width");
+                            shortcut: root.header-keys[0];
                             active: root.zoom-mode == "fit-width";
                             clicked => {
                                 root.zoom-action("fit-width");
                             }
                         }
-                        TextButton {
+                        IconButton {
                             y: (parent.height - self.height) / 2;
-                            text: @tr("Fit page");
+                            icon: "fit-page";
+                            tip: @tr("Fit page");
+                            shortcut: root.header-keys[1];
                             active: root.zoom-mode == "fit-page";
                             clicked => {
                                 root.zoom-action("fit-page");
@@ -347,9 +357,11 @@ export component AppWindow inherits Window {
                         Rectangle {
                             width: Theme.spacing;
                         }
-                        TextButton {
+                        IconButton {
                             y: (parent.height - self.height) / 2;
-                            text: "−";
+                            icon: "zoom-out";
+                            tip: @tr("Zoom out");
+                            shortcut: root.header-keys[2];
                             clicked => {
                                 root.zoom-action("out");
                             }
@@ -362,9 +374,11 @@ export component AppWindow inherits Window {
                             horizontal-alignment: center;
                             width: 44px;
                         }
-                        TextButton {
+                        IconButton {
                             y: (parent.height - self.height) / 2;
-                            text: "+";
+                            icon: "zoom-in";
+                            tip: @tr("Zoom in");
+                            shortcut: root.header-keys[3];
                             clicked => {
                                 root.zoom-action("in");
                             }
@@ -399,15 +413,16 @@ export component AppWindow inherits Window {
                         width: Theme.spacing;
                     }
                     Text {
-                        text: root.page-count == 0 ? "" : root.status != "" ? root.status : root.page-label != "" ? "\{root.page-label} (\{root.current-page} / \{root.page-count})" : "\{root.current-page} / \{root.page-count}";
+                        text: root.page-count == 0 ? "" : root.page-label != "" ? "\{root.page-label} (\{root.current-page} / \{root.page-count})" : "\{root.current-page} / \{root.page-count}";
                         color: Theme.text-muted;
                         font-size: Theme.font-size;
                         vertical-alignment: center;
                     }
-                    TextButton {
+                    IconButton {
                         y: (parent.height - self.height) / 2;
-                        text: "⚙";
-                        font-size: Theme.font-size + 2px;
+                        icon: "settings";
+                        tip: @tr("Settings");
+                        shortcut: root.header-keys[4];
                         clicked => {
                             root.settings-clicked();
                         }
@@ -496,7 +511,6 @@ export component AppWindow inherits Window {
 
                     if root.page-count == 0: StartScreen {
                         recent: root.recent;
-                        status: root.status;
                         sessions: root.sessions;
                         session-name: root.session-name;
                         subjects: root.subjects;
@@ -1039,6 +1053,56 @@ export component AppWindow inherits Window {
             }
             item-clicked(i) => {
                 root.palette-clicked(i);
+            }
+        }
+
+        // Notification: "Downloading dpdf…", "Copied". Quick ones clear
+        // themselves from Rust; the rest stay until done or dismissed.
+        if root.status != "": Panel {
+            x: parent.width - self.width - Theme.spacing;
+            y: parent.height - self.height - Theme.spacing;
+            width: min(parent.width - 2 * Theme.spacing, 340px);
+            height: toast-row.preferred-height;
+
+            toast-row := HorizontalLayout {
+                padding: 10px;
+                padding-left: 12px;
+                spacing: 10px;
+
+                Rectangle {
+                    y: (parent.height - self.height) / 2;
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: Theme.accent;
+                }
+                Text {
+                    text: root.status;
+                    color: Theme.text;
+                    font-size: Theme.font-size;
+                    vertical-alignment: center;
+                    wrap: word-wrap;
+                    horizontal-stretch: 1;
+                }
+                Rectangle {
+                    width: 22px;
+                    height: 22px;
+                    border-radius: Theme.radius;
+                    background: close-touch.has-hover ? Theme.hover : transparent;
+
+                    Icon {
+                        name: "close";
+                        width: 12px;
+                        height: 12px;
+                    }
+
+                    close-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.status = "";
+                        }
+                    }
+                }
             }
         }
     }

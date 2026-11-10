@@ -355,7 +355,6 @@ export component ReadingArea inherits Rectangle {
 // Shown when no document is open: a hint, the last session, and recent files.
 export component StartScreen inherits Rectangle {
     in property <[RecentItem]> recent;
-    in property <string> status;
     in property <[RecentItem]> sessions;
     in property <string> session-name;
     // The session's documents and today's / this week's study time.
@@ -375,7 +374,7 @@ export component StartScreen inherits Rectangle {
         x: (parent.width - self.width) / 2;
 
         Text {
-            text: root.status != "" ? root.status : @tr("Open a PDF with Ctrl+O, or press Ctrl+K for everything else");
+            text: @tr("Open a PDF with Ctrl+O, or press Ctrl+K for everything else");
             color: Theme.text-muted;
             font-size: Theme.font-size;
             horizontal-alignment: center;
