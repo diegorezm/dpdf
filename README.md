@@ -16,7 +16,8 @@ dpdf is a calm, keyboard-first reading environment: the page fills the screen, a
 - **Sidebar:** page thumbnails, the document's outline, or a list of your notes; click to jump.
 - **Tabs and sessions:** open several PDFs at once. Group them into named sessions, like tmux: one for your thesis, one for a course. Switch with `Ctrl+Shift+S`; dpdf reattaches to the last session on startup, each tab at the page and zoom you left it.
 - **Annotations:** select text (across pages, too) to highlight it (5 colors), underline, strike through, attach a note, or copy it. Double-click selects a line; hovering a note shows it. **Export your notes to Obsidian-ready Markdown:** properties, one callout per quote linking to its page (`[[book.pdf#page=12|p. 12, line 7]]`), and stable `^dpdf-<id>` block ids you can link to from other notes. Notes are stored next to your settings; the PDF is never modified.
-- **Search:** in-document text search with match highlighting.
+- **Studying:** highlight colors with a meaning (*Important*, *Trap*, …, renamed as you like) on keys `1`–`5`, a notes panel filtered by color, sections marked read and reviewed with progress per document, a study timer, and exports to a Markdown summary, **Anki cards**, or CSV.
+- **Search:** in-document text search with match highlighting, a search across every tab in the session that ignores accents, and `art. 37` to jump to an article of a law.
 - **Command palette** (`Ctrl+K`): every command, open tab, recent file, and theme, with fuzzy matching. Type a number to jump to that page.
 - **Customizable:** themes, interface font, density, and keybindings in TOML, optional **vim keys**, inverted page colors for night reading.
 - Opens password-protected PDFs; drop files on the window to open them.

@@ -2,6 +2,26 @@
 
 All notable changes to dpdf. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- **Highlight colors with a meaning.** Each color has a name (yellow
+  *Important*, red *Trap*, and so on), set in `config.toml` under
+  `[color_names]`. Keys `1`–`5` highlight the selection or recolor the
+  clicked highlight, and page thumbnails show the colors on each page.
+- **Notes filter.** The notes panel can hide colors.
+- **Section progress.** Outline sections can be marked read and reviewed
+  (click the box or `Ctrl+L`); the outline and the home screen show how far
+  each document is.
+- **Export sheet** (`Ctrl+E`): a Markdown summary grouped by section and
+  color, the Obsidian format, a file Anki imports as cards, or CSV.
+- **Study timer** in the header, counting the time you actually read, per
+  day and document (`Ctrl+T` pauses it; `study_timer = false` hides it).
+- **Home screen** lists the session's tabs with progress, notes, and time.
+- **Session search** (`Ctrl+Shift+F`) across every tab, ignoring accents.
+- **Go to article**: `art. 37` in Go to page jumps to that article.
+
 ## 1.0.4 — 2026-11-09
 
 Version 1.0.3 was skipped: its performance work ships here, together with

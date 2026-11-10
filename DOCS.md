@@ -15,7 +15,8 @@ The defaults. All of them can be changed (see [Customizing](#customizing)), and 
 | `Ctrl+O` | Open PDFs (in new tabs) |
 | `Ctrl+K` / `Ctrl+Shift+P` | Command palette |
 | `Ctrl+F` | Search (`Enter` / `Shift+Enter` for next / previous match) |
-| `Ctrl+P` | Go to page |
+| `Ctrl+Shift+F` | Search the text of every tab in the session |
+| `Ctrl+P` | Go to page, or to an article of a law (`art. 37`) |
 | `Ctrl++` / `Ctrl+-` / `Ctrl`+wheel | Zoom in / out |
 | `Ctrl+0` or `Ctrl+1` / `Ctrl+2` | Fit width / fit page |
 | `Ctrl+B` | Toggle sidebar |
@@ -28,12 +29,25 @@ The defaults. All of them can be changed (see [Customizing](#customizing)), and 
 | `←` `→` `PgUp` `PgDn` / `↑` `↓` | Previous / next page / scroll |
 | `Home` / `End` | First / last page |
 | `Ctrl+C` / `Ctrl+H` / `Ctrl+N` | Copy / highlight / add a note to the selection |
+| `1` … `5` | Highlight the selection in that color, or recolor the clicked highlight |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo annotation changes |
-| `Ctrl+Shift+E` | Export notes as Markdown |
+| `Ctrl+L` | Mark the current outline section read, then reviewed once, twice |
+| `Ctrl+E` | Export notes: Markdown, Anki, or CSV |
+| `Ctrl+T` | Pause / resume the study timer |
 | `Ctrl+,` | Settings |
 | `Esc` | Close overlay, clear selection, leave fullscreen or focus mode |
 
 With **vim keys** on: `j` `k` `h` `l` scroll, `Ctrl+D` / `Ctrl+U` half screen, `J` / `K` next / previous page, `gg` / `G` first / last page, `/` search, `n` / `N` next / previous match, `:` palette, `gt` / `gT` tabs, `zi` `zo` `zw` `zp` zoom, `y` copy, `u` / `Ctrl+R` undo / redo, `t` sidebar.
+
+## Studying
+
+dpdf has a few tools for studying, for exams for example, that stay out of the way when you don't use them.
+
+- **Colors with a meaning.** The five highlight colors have names, shown in the notes panel and in exports: yellow *Important*, green *Case law*, blue *Later*, pink *Definition*, red *Trap*. Rename them in `config.toml` (below). Page thumbnails show which colors a page has, and the notes panel can hide colors: click one to toggle it.
+- **Progress.** In the outline, click the box next to a section (or press `Ctrl+L` in it) to mark it read, then reviewed once and twice. The outline shows how much of the document you've read; the home screen shows it for every tab in the session, with notes and study time.
+- **Export.** `Ctrl+E` exports the notes in the colors the notes panel shows: as a Markdown summary grouped by section and color (or the Obsidian format, grouped by page), as a file Anki imports as cards (*File › Import*; the note is the front, the quote the back, color and document are tags), or as CSV. Reviewing the cards is left to Anki or whatever app you use.
+- **Study time.** The header shows how long you've read today. Time counts while you use dpdf (pauses longer than five minutes don't count) and is kept per day and document in `study.txt`. Click it or press `Ctrl+T` to pause; `study_timer = false` hides it.
+- **Session search and law articles.** `Ctrl+Shift+F` searches every tab in the session at once, ignoring case and accents (`licitacao` finds *licitação*). In Go to page, `art. 37` jumps to where that article starts.
 
 ## Customizing
 
@@ -45,6 +59,7 @@ Everything lives in `%APPDATA%\dpdf\` (Settings → General → Data folder):
 | `themes\*.toml` | Your themes. Start from any file in this repo's [`themes/`](themes) folder. |
 | `annotations\*.toml` | Highlights and notes, one file per document. |
 | `state.txt` | Recent files, reading positions, and sessions with their tabs. |
+| `study.txt` | Study time per day and document. |
 
 Font, keybindings, and more in `config.toml`:
 
@@ -57,7 +72,12 @@ thumbnail_size = "medium"        # small, medium, large
 vim = true
 check_updates = false            # don't ask GitHub for new releases on startup
 sidebar_button = false           # hide the header button that reopens the sidebar
-notes_folder = 'C:\Users\me\Vault\PDF notes'  # Ctrl+Shift+E writes here, no dialog
+notes_folder = 'C:\Users\me\Vault\PDF notes'  # Ctrl+E saves here, no dialog
+study_timer = false              # hide the study time in the header
+
+[color_names]                    # what each highlight color means
+red = "Pegadinha"
+green = "Jurisprudência"
 
 [keys]
 open = ["ctrl+o"]

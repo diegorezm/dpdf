@@ -60,6 +60,7 @@ PDFium is loaded at runtime as `pdfium.dll`, first from the executable's directo
 Built after the MVP, because they serve the core use (studying documents):
 - Tabs and named sessions (tmux-like: each session has its own tabs; dpdf reattaches to the last one on startup).
 - Annotations (highlight, underline, strikethrough, notes) stored outside the PDF, with Markdown export.
+- Study tools: named highlight colors, a notes filter, section progress, a study timer, session search, Anki/CSV export. Spaced repetition itself stays out: dpdf exports, a dedicated app reviews.
 - Focus mode, command palette, TOML themes and keybindings, optional vim keys.
 - Outline and notes panels in the sidebar, clickable links, page labels, password-protected PDFs.
 
@@ -102,7 +103,7 @@ Rejected by default:
 
 Bindings are data, not code: `DEFAULT_KEYS` and `VIM_KEYS` in `src/keymap.rs`, overridable per action in `config.toml` under `[keys]`. Every `Action` has a stable kebab-case name (used in config) and a title (used in the palette and Settings). Multi-key sequences (`g g`) are supported.
 
-Core defaults: `Ctrl+O` open, `Ctrl+K` palette, `Ctrl+F` search, `Ctrl+P` go to page, `Ctrl++/-/0` zoom, `Ctrl+1/2` fit width/page, `Ctrl+B` sidebar, `Ctrl+.` focus mode, `F11` fullscreen, `Ctrl+Tab`/`Ctrl+W` tabs, arrows/PgUp/PgDn/Home/End navigation, `Ctrl+C/H/N` copy/highlight/note, `Esc` close/clear.
+Core defaults: `Ctrl+O` open, `Ctrl+K` palette, `Ctrl+F` search, `Ctrl+Shift+F` session search, `Ctrl+E` export, `Ctrl+L` mark section, `Ctrl+T` study timer, `1`–`5` highlight colors, `Ctrl+P` go to page, `Ctrl++/-/0` zoom, `Ctrl+1/2` fit width/page, `Ctrl+B` sidebar, `Ctrl+.` focus mode, `F11` fullscreen, `Ctrl+Tab`/`Ctrl+W` tabs, arrows/PgUp/PgDn/Home/End navigation, `Ctrl+C/H/N` copy/highlight/note, `Esc` close/clear.
 
 (`Cmd` replaces `Ctrl` on macOS if it is ever supported.) Every new user-facing action gets an `Action` variant (so it is bindable and in the palette) and, usually, a default key.
 
@@ -138,7 +139,9 @@ src/
   keymap.rs       // actions, key chords and sequences, default + vim bindings
   palette.rs      // pure fuzzy matching for the command palette
   search.rs       // pure search results and match navigation
-  annotations.rs  // annotation model, TOML storage, Markdown export
+  annotations.rs  // annotation model and section progress, TOML storage, Markdown export
+  export.rs       // pure exports: section summary, Anki TSV, CSV
+  study.rs        // study time from activity, per day and document (study.txt)
   config.rs       // config.toml + theme files
   store.rs        // reading history and last session (state.txt)
   nav.rs          // pure page navigation and page-number parsing
@@ -158,9 +161,9 @@ The PDF worker processes one small unit at a time (text selection > page render 
 
 Rules:
 - `.slint` files expose properties and callbacks; they contain no business logic beyond trivial layout/visibility bindings.
-- `pdf`, `recover`, `layout`, `cache`, `nav`, `keymap`, `palette`, `search`, `annotations`, `config`, `store` must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs`, `app.rs`, and `viewer.rs` touch Slint types.
+- `pdf`, `recover`, `layout`, `cache`, `nav`, `keymap`, `palette`, `search`, `annotations`, `export`, `study`, `config`, `store` must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs`, `app.rs`, and `viewer.rs` touch Slint types.
 - State flows one way: UI callback → `Action` → controller updates state → controller pushes properties to UI.
-- Paths: everything user-owned lives in `%APPDATA%\dpdf` (`config.toml`, `themes\`, `annotations\`, `state.txt`); caches go in `%LOCALAPPDATA%\dpdf`. Never write next to the executable, in the document folder, or into the PDF.
+- Paths: everything user-owned lives in `%APPDATA%\dpdf` (`config.toml`, `themes\`, `annotations\`, `state.txt`, `study.txt`); caches go in `%LOCALAPPDATA%\dpdf`. Never write next to the executable, in the document folder, or into the PDF.
 - User files must never block startup: parse leniently, fall back to defaults, and report problems in Settings.
 - Grow the module tree when needed; do not create empty modules ahead of time.
 
