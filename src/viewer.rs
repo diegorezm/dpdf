@@ -273,6 +273,20 @@ impl Viewer {
         self.path.as_deref() == Some(path) || self.pending.as_deref() == Some(path)
     }
 
+    /// Searches the text of `paths` on the worker; results arrive as
+    /// `FileHit` events.
+    pub fn search_files(&self, id: u64, query: &str, paths: Vec<PathBuf>) {
+        self.worker.send(Request::SearchFiles {
+            id,
+            query: query.to_owned(),
+            paths,
+        });
+    }
+
+    pub fn find_article(&self, number: u32) {
+        self.worker.send(Request::FindArticle { number });
+    }
+
     pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
     }

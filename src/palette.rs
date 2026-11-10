@@ -12,6 +12,8 @@ pub enum Target {
     GoToPage(usize),
     Theme(String),
     Session(usize),
+    /// A page of a document found by searching the session.
+    Hit(PathBuf, usize),
 }
 
 #[derive(Debug, Clone, PartialEq)]

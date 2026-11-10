@@ -8,6 +8,7 @@ export component Palette inherits Panel {
     in property <[PaletteItem]> items;
     in property <int> selected;
     in-out property <string> query <=> input.text;
+    in property <string> placeholder: "Search commands, tabs, files, themes, or type a page number…";
     callback edited(string);
     callback moved(int);
     callback accepted();
@@ -56,7 +57,7 @@ export component Palette inherits Panel {
 
                 if input.text == "": Text {
                     x: 14px;
-                    text: "Search commands, tabs, files, themes, or type a page number…";
+                    text: root.placeholder;
                     color: Theme.text-muted;
                     font-size: Theme.font-size-large;
                 }

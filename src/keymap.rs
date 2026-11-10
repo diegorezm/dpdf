@@ -35,6 +35,7 @@ actions! {
     Open => "open", "Open file…";
     CommandPalette => "command-palette", "Command palette";
     Search => "search", "Search in document";
+    SearchSession => "search-session", "Search all tabs in session…";
     NextMatch => "next-match", "Next search match";
     PreviousMatch => "previous-match", "Previous search match";
     GoToPage => "go-to-page", "Go to page…";
@@ -107,6 +108,7 @@ const DEFAULT_KEYS: &[(Action, &str)] = &[
     (Action::CommandPalette, "ctrl+k"),
     (Action::CommandPalette, "ctrl+shift+p"),
     (Action::Search, "ctrl+f"),
+    (Action::SearchSession, "ctrl+shift+f"),
     (Action::GoToPage, "ctrl+p"),
     (Action::Settings, "ctrl+,"),
     (Action::ToggleSidebar, "ctrl+b"),

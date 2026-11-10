@@ -44,6 +44,15 @@ pub enum Request {
     SetInverted(bool),
     /// Follows the link at a point on a page (page fractions), if any.
     LinkAt { page: usize, point: (f32, f32) },
+    /// Searches the text of other documents, one page at a time, replacing
+    /// any running file search. An empty query just cancels.
+    SearchFiles {
+        id: u64,
+        query: String,
+        paths: Vec<PathBuf>,
+    },
+    /// Finds the page where article `number` of a law starts ("Art. 37").
+    FindArticle { number: u32 },
 }
 
 /// One outline (table of contents) entry, flattened in reading order.
@@ -101,6 +110,23 @@ pub enum Event<B = Bitmap> {
     /// Result of a `Select`, one part per page; empty when nothing was
     /// selected.
     Selection(Vec<SelectionPart>),
+    /// A page of another document that has the query, with the text around
+    /// the first match.
+    FileHit {
+        id: u64,
+        path: PathBuf,
+        page: usize,
+        snippet: String,
+        count: usize,
+    },
+    FilesDone {
+        id: u64,
+    },
+    /// Where an article starts, if found.
+    Article {
+        number: u32,
+        page: Option<usize>,
+    },
     Error(String),
 }
 
@@ -138,6 +164,21 @@ impl<B> Event<B> {
             Event::SearchHits { id, page, matches } => Event::SearchHits { id, page, matches },
             Event::SearchDone { id } => Event::SearchDone { id },
             Event::Selection(parts) => Event::Selection(parts),
+            Event::FileHit {
+                id,
+                path,
+                page,
+                snippet,
+                count,
+            } => Event::FileHit {
+                id,
+                path,
+                page,
+                snippet,
+                count,
+            },
+            Event::FilesDone { id } => Event::FilesDone { id },
+            Event::Article { number, page } => Event::Article { number, page },
             Event::Error(message) => Event::Error(message),
         }
     }
@@ -295,6 +336,26 @@ fn refines(old: &str, new: &str) -> bool {
     !old.is_empty() && new.to_lowercase().contains(&old.to_lowercase())
 }
 
+/// A search through other documents' text.
+struct FilesJob<'a> {
+    id: u64,
+    query: Vec<char>,
+    paths: VecDeque<PathBuf>,
+    /// The document being searched and the next page in it.
+    current: Option<(PathBuf, PdfDocument<'a>, usize)>,
+    hits: usize,
+}
+
+/// Results a file search stops at.
+const MAX_FILE_HITS: usize = 200;
+/// Characters of context on each side of a file search match.
+const SNIPPET_CONTEXT: usize = 50;
+
+struct ArticleJob {
+    number: u32,
+    next: usize,
+}
+
 fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
     let pdfium = match bind() {
         Ok(pdfium) => pdfium,
@@ -317,17 +378,21 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
     let mut labels_due = false;
     let mut link: Option<(usize, (f32, f32))> = None;
     let mut select_line: Option<(usize, (f32, f32))> = None;
+    let mut files: Option<FilesJob> = None;
+    let mut article: Option<ArticleJob> = None;
 
     loop {
-        let idle = documents.is_empty()
-            || (renders.pages.is_empty()
-                && renders.previews.is_empty()
-                && thumbs.pages.is_empty()
-                && search.is_none()
-                && select.is_none()
-                && select_line.is_none()
-                && link.is_none()
-                && !labels_due);
+        let idle = files.is_none()
+            && (documents.is_empty() || article.is_none())
+            && (documents.is_empty()
+                || (renders.pages.is_empty()
+                    && renders.previews.is_empty()
+                    && thumbs.pages.is_empty()
+                    && search.is_none()
+                    && select.is_none()
+                    && select_line.is_none()
+                    && link.is_none()
+                    && !labels_due));
         let request = if idle {
             match rx.recv() {
                 Ok(request) => Some(request),
@@ -349,6 +414,7 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 last_search = None;
                 select = None;
                 link = None;
+                article = None;
                 char_cache.clear();
                 labels_due = false;
                 let stamp = modified(&path);
@@ -441,6 +507,21 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 inverted = value;
                 continue;
             }
+            Some(Request::SearchFiles { id, query, paths }) => {
+                let query: Vec<char> = query.trim().chars().map(fold).collect();
+                files = (!query.is_empty()).then(|| FilesJob {
+                    id,
+                    query,
+                    paths: paths.into(),
+                    current: None,
+                    hits: 0,
+                });
+                continue;
+            }
+            Some(Request::FindArticle { number }) => {
+                article = Some(ArticleJob { number, next: 0 });
+                continue;
+            }
             Some(Request::Search { id, query }) => {
                 let previous = search.take().or(last_search.take());
                 let count = documents.front().map_or(0, |d| d.page_sizes.len());
@@ -448,6 +529,26 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
                 continue;
             }
             None => {}
+        }
+
+        // Other documents are searched only when the live one has nothing
+        // else to do, so reading never waits for them.
+        let live_busy = !documents.is_empty()
+            && (!renders.pages.is_empty()
+                || !renders.previews.is_empty()
+                || search.is_some()
+                || select.is_some()
+                || select_line.is_some()
+                || link.is_some()
+                || article.is_some());
+        if !live_busy {
+            if let Some(job) = &mut files {
+                if search_files_step(&pdfium, job, &on_event) {
+                    on_event(Event::FilesDone { id: job.id });
+                    files = None;
+                }
+                continue;
+            }
         }
 
         let Some(OpenDoc {
@@ -494,6 +595,20 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
             on_event(Event::Selection(number_lines(parts, |page| {
                 cached_chars(doc, &mut char_cache, page, &mut recover)
             })));
+        } else if let Some(job) = &mut article {
+            let page = job.next;
+            job.next += 1;
+            let found = load_page(doc, page)
+                .ok()
+                .and_then(|p| p.text().ok().map(|t| t.all()))
+                .is_some_and(|text| crate::nav::starts_article(&text, job.number));
+            if found || job.next >= page_sizes.len() {
+                on_event(Event::Article {
+                    number: job.number,
+                    page: found.then_some(page),
+                });
+                article = None;
+            }
         } else if let Some(page) = renders.previews.pop_front() {
             let width_px = (renders.width_px / PREVIEW_DIVISOR).max(1);
             // The full render follows; a failed preview needs no message.
@@ -552,6 +667,89 @@ fn run(rx: Receiver<Request>, on_event: impl Fn(Event)) {
             }
         }
     }
+}
+
+/// Lowercase without accents, one char for one char, so positions in the
+/// folded text match the original: "Licitação" and "licitacao" match.
+fn fold(c: char) -> char {
+    let c = c.to_lowercase().next().unwrap_or(c);
+    match c {
+        'á' | 'à' | 'â' | 'ã' | 'ä' => 'a',
+        'é' | 'è' | 'ê' | 'ë' => 'e',
+        'í' | 'ì' | 'î' | 'ï' => 'i',
+        'ó' | 'ò' | 'ô' | 'õ' | 'ö' => 'o',
+        'ú' | 'ù' | 'û' | 'ü' => 'u',
+        'ç' => 'c',
+        'ñ' => 'n',
+        c if c.is_whitespace() => ' ',
+        c => c,
+    }
+}
+
+/// Matches of `query` (folded) in `text`, and the text around the first.
+fn find_in_text(text: &str, query: &[char]) -> Option<(usize, String)> {
+    let chars: Vec<char> = text.chars().collect();
+    let folded: Vec<char> = chars.iter().map(|&c| fold(c)).collect();
+    if query.is_empty() || folded.len() < query.len() {
+        return None;
+    }
+    let starts: Vec<usize> = (0..=folded.len() - query.len())
+        .filter(|&i| folded[i..i + query.len()] == *query)
+        .collect();
+    let first = *starts.first()?;
+    let from = first.saturating_sub(SNIPPET_CONTEXT);
+    let to = (first + query.len() + SNIPPET_CONTEXT).min(chars.len());
+    let snippet: String = chars[from..to].iter().collect();
+    let mut snippet = snippet.split_whitespace().collect::<Vec<_>>().join(" ");
+    if from > 0 {
+        snippet.insert(0, '…');
+    }
+    if to < chars.len() {
+        snippet.push('…');
+    }
+    Some((starts.len(), snippet))
+}
+
+/// Searches one page of a file search, or opens its next document.
+/// Returns true when the search is finished.
+fn search_files_step<'a>(
+    pdfium: &'a Pdfium,
+    job: &mut FilesJob<'a>,
+    on_event: &impl Fn(Event),
+) -> bool {
+    if job.hits >= MAX_FILE_HITS {
+        return true;
+    }
+    let Some((path, doc, page)) = &mut job.current else {
+        let Some(path) = job.paths.pop_front() else {
+            return true;
+        };
+        // Encrypted or broken documents are skipped.
+        if let Ok((doc, _)) = open(pdfium, &path, None) {
+            job.current = Some((path, doc, 0));
+        }
+        return false;
+    };
+    let count = doc.pages().len() as usize;
+    if *page >= count {
+        job.current = None;
+        return false;
+    }
+    let text = load_page(doc, *page)
+        .ok()
+        .and_then(|p| p.text().ok().map(|t| t.all()));
+    if let Some((matches, snippet)) = text.and_then(|t| find_in_text(&t, &job.query)) {
+        job.hits += 1;
+        on_event(Event::FileHit {
+            id: job.id,
+            path: path.clone(),
+            page: *page,
+            snippet,
+            count: matches,
+        });
+    }
+    *page += 1;
+    false
 }
 
 /// Prefers the pdfium.dll next to the executable, then the system library.
@@ -1260,6 +1458,20 @@ fn file_title(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_search_ignores_case_and_accents() {
+        let query: Vec<char> = "licitacao".chars().map(fold).collect();
+        let text = "Lei 14.133. A LICITAÇÃO é o procedimento.\r\nOutra licitação aqui.";
+        let (count, snippet) = find_in_text(text, &query).unwrap();
+        assert_eq!(count, 2);
+        assert!(snippet.starts_with("Lei 14.133. A LICITAÇÃO"));
+        assert!(!snippet.contains('\r'));
+        assert!(find_in_text("nada", &query).is_none());
+        let long = format!("{}needle{}", "a ".repeat(60), " b".repeat(60));
+        let (_, snippet) = find_in_text(&long, &['n', 'e', 'e', 'd', 'l', 'e']).unwrap();
+        assert!(snippet.starts_with('…') && snippet.ends_with('…'));
+    }
 
     #[test]
     fn title_from_path() {

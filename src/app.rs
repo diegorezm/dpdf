@@ -27,6 +27,9 @@ use crate::{
 };
 
 const PALETTE_LIMIT: usize = 12;
+/// Characters a session search needs before it starts.
+const MIN_SESSION_QUERY: usize = 3;
+const PALETTE_PLACEHOLDER: &str = "Search commands, tabs, files, themes, or type a page number…";
 /// Lines of the export shown in the export sheet.
 const EXPORT_PREVIEW_LINES: usize = 14;
 
@@ -68,6 +71,12 @@ pub struct App {
     export_format: Format,
     /// Group Markdown exports by outline section.
     export_by_section: bool,
+
+    /// The palette is searching the session's documents, with this id.
+    session_search: Option<u64>,
+    next_session_search: u64,
+    /// A page to show once its document opens, and the query to highlight.
+    open_at: Option<(PathBuf, usize, String)>,
 
     palette_entries: Vec<Entry>,
     palette_shown: Vec<Entry>,
@@ -112,6 +121,9 @@ impl App {
             study_shown: String::new(),
             export_format: Format::Markdown,
             export_by_section: true,
+            session_search: None,
+            next_session_search: 0,
+            open_at: None,
             palette_entries: Vec::new(),
             palette_shown: Vec::new(),
             palette_selected: 0,
@@ -400,6 +412,7 @@ impl App {
             Action::Open => self.open_dialog(window),
             Action::CommandPalette => self.open_palette(window),
             Action::Search if self.viewer.page_count() > 0 => self.set_overlay(window, "search"),
+            Action::SearchSession => self.open_session_search(window),
             Action::GoToPage if self.viewer.page_count() > 0 => {
                 window.set_goto_text(ui_int(self.viewer.current_page() + 1).to_string().into());
                 self.set_overlay(window, "goto");
@@ -564,6 +577,9 @@ impl App {
     }
 
     pub fn set_overlay(&mut self, window: &AppWindow, overlay: &str) {
+        if overlay != "palette" {
+            self.end_session_search(window);
+        }
         // Dismissing the password prompt gives up on that document.
         if overlay != "prompt" {
             if let Some(Prompt::Password(path)) = self.prompt.take() {
@@ -780,6 +796,7 @@ impl App {
     }
 
     fn open_session_picker(&mut self, window: &AppWindow) {
+        self.end_session_search(window);
         self.palette_entries = self.session_entries();
         self.palette_entries.push(Entry {
             target: Target::Command(Action::NewSession),
@@ -968,6 +985,11 @@ impl App {
             } => {
                 self.viewer.opened(window, title, page_sizes, outline);
                 self.tabs_changed(window);
+                if let Some((path, page, query)) = self.open_at.take() {
+                    if self.viewer.is_showing(&path) {
+                        self.show_hit(window, page, &query);
+                    }
+                }
             }
             Event::PasswordNeeded { path, retry } => {
                 if self.viewer.is_pending(&path) {
@@ -996,6 +1018,15 @@ impl App {
             }
             Event::SearchDone { id } => self.viewer.search_done(window, id),
             Event::Selection(parts) => self.viewer.selected(window, parts),
+            Event::FileHit {
+                id,
+                path,
+                page,
+                snippet,
+                count,
+            } => self.file_hit(window, id, path, page, snippet, count),
+            Event::FilesDone { .. } => {}
+            Event::Article { number, page } => self.article_found(window, number, page),
             Event::Error(message) => {
                 if let Some(path) = self.viewer.open_failed(window, message) {
                     if let Some(index) = self.tabs.iter().position(|t| *t == path) {
@@ -1019,8 +1050,119 @@ impl App {
     }
 
     pub fn go_to_typed_page(&mut self, window: &AppWindow, text: &str) {
-        self.viewer.go_to_typed_page(window, text);
         self.set_overlay(window, "");
+        // "art. 37" jumps to where that article of a law starts.
+        match crate::nav::parse_article(text) {
+            Some(number) => {
+                self.viewer.find_article(number);
+                window.set_status(format!("Looking for art. {number}…").into());
+            }
+            None => self.viewer.go_to_typed_page(window, text),
+        }
+    }
+
+    fn article_found(&mut self, window: &AppWindow, number: u32, page: Option<usize>) {
+        match page {
+            Some(page) => {
+                window.set_status("".into());
+                self.viewer.go_to_page(window, page);
+            }
+            None => self.flash(window, &format!("Art. {number} not found")),
+        }
+    }
+
+    // ----- Session search ----------------------------------------------------
+
+    /// Back to the command palette's own search; stops the worker.
+    fn end_session_search(&mut self, window: &AppWindow) {
+        if self.session_search.take().is_some() {
+            self.viewer.search_files(0, "", Vec::new());
+            window.set_palette_placeholder(PALETTE_PLACEHOLDER.into());
+        }
+    }
+
+    fn open_session_search(&mut self, window: &AppWindow) {
+        if self.tabs.is_empty() {
+            self.flash(window, "No tabs in this session");
+            return;
+        }
+        self.palette_entries.clear();
+        self.session_search = Some(self.next_session_search);
+        window.set_palette_placeholder(
+            format!(
+                "Search the text of {} in this session…",
+                match self.tabs.len() {
+                    1 => "the tab".to_owned(),
+                    n => format!("all {n} tabs"),
+                }
+            )
+            .into(),
+        );
+        window.set_palette_query("".into());
+        self.palette_edited(window, "");
+        self.set_overlay(window, "palette");
+    }
+
+    fn session_query_edited(&mut self, window: &AppWindow, query: &str) {
+        self.next_session_search += 1;
+        let id = self.next_session_search;
+        self.session_search = Some(id);
+        self.palette_shown.clear();
+        self.palette_selected = 0;
+        let query = query.trim();
+        let paths = if query.chars().count() >= MIN_SESSION_QUERY {
+            self.tabs.clone()
+        } else {
+            Vec::new()
+        };
+        let searching = !paths.is_empty();
+        self.viewer
+            .search_files(id, if searching { query } else { "" }, paths);
+        self.update_palette(window);
+    }
+
+    fn file_hit(
+        &mut self,
+        window: &AppWindow,
+        id: u64,
+        path: PathBuf,
+        page: usize,
+        snippet: String,
+        count: usize,
+    ) {
+        if self.session_search != Some(id) || window.get_overlay() != "palette" {
+            return;
+        }
+        let matches = match count {
+            1 => String::new(),
+            n => format!(" · {n} matches"),
+        };
+        self.palette_shown.push(Entry {
+            target: Target::Hit(path.clone(), page),
+            title: snippet,
+            detail: format!("{} · p. {}{matches}", file_name(&path), page + 1),
+            keys: String::new(),
+        });
+        self.update_palette(window);
+    }
+
+    /// Shows a page found by the session search, opening its tab first.
+    fn open_hit(&mut self, window: &AppWindow, path: PathBuf, page: usize) {
+        let query = window.get_palette_query().trim().to_owned();
+        if self.viewer.is_showing(&path) && self.viewer.page_count() > 0 {
+            self.show_hit(window, page, &query);
+        } else {
+            self.open_at = Some((path.clone(), page, query));
+            self.open_path(window, path);
+        }
+    }
+
+    fn show_hit(&mut self, window: &AppWindow, page: usize, query: &str) {
+        self.viewer.go_to_page(window, page);
+        // Highlight the matches, as if searched in the document.
+        window.set_search_text(query.into());
+        self.viewer.search_edited(window, query);
+        self.set_overlay(window, "search");
     }
 
     pub fn popup_action(&mut self, window: &AppWindow, action: &str, index: usize) {
@@ -1143,6 +1285,7 @@ impl App {
     // ----- Command palette -------------------------------------------------
 
     fn open_palette(&mut self, window: &AppWindow) {
+        self.end_session_search(window);
         let mut entries: Vec<Entry> = Vec::new();
         for (i, path) in self.tabs.iter().enumerate() {
             entries.push(Entry {
@@ -1199,6 +1342,9 @@ impl App {
     }
 
     pub fn palette_edited(&mut self, window: &AppWindow, query: &str) {
+        if self.session_search.is_some() {
+            return self.session_query_edited(window, query);
+        }
         let mut shown = palette::filter(&self.palette_entries, query, PALETTE_LIMIT);
         if let Some(page) = palette::page_query(query) {
             if page <= self.viewer.page_count() {
@@ -1241,6 +1387,7 @@ impl App {
             Target::GoToPage(page) => self.viewer.go_to_page(window, page),
             Target::Theme(name) => self.setting(window, "theme", &name),
             Target::Session(i) => self.switch_session(window, i),
+            Target::Hit(path, page) => self.open_hit(window, path, page),
         }
     }
 

@@ -76,6 +76,7 @@ export component AppWindow inherits Window {
     in property <[PaletteItem]> palette-items;
     in property <int> palette-selected;
     in-out property <string> palette-query <=> palette.query;
+    in property <string> palette-placeholder: "Search commands, tabs, files, themes, or type a page number…";
     in-out property <string> note-text <=> note-input.text;
     in property <string> note-quote;
     // Export sheet: "markdown", "anki", or "csv".
@@ -740,7 +741,7 @@ export component AppWindow inherits Window {
                         visible: root.overlay == "goto";
                         x: (parent.width - self.width) / 2;
                         y: parent.height * 0.2;
-                        width: 220px;
+                        width: 260px;
                         height: 44px;
 
                         HorizontalLayout {
@@ -749,7 +750,7 @@ export component AppWindow inherits Window {
                             spacing: 8px;
 
                             Text {
-                                text: "Page";
+                                text: "Page or art.";
                                 color: Theme.text-muted;
                                 font-size: Theme.font-size;
                                 vertical-alignment: center;
@@ -1026,6 +1027,7 @@ export component AppWindow inherits Window {
             width: min(parent.width - 32px, 600px);
             items: root.palette-items;
             selected: root.palette-selected;
+            placeholder: root.palette-placeholder;
             edited(text) => {
                 root.palette-edited(text);
             }
