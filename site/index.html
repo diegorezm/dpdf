@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>dpdf — a calm PDF reader</title>
-  <meta name="description" content="A fast, minimal, local-first PDF reader for Windows, built with Rust and Slint.">
+  <title>dpdf — o leitor de PDF para quem estuda</title>
+  <meta name="description" content="Leitor de PDF rápido e local para Windows, feito para estudar: grifos com significado, progresso por capítulo, cronômetro de estudo, busca em todo o material e exportação para o Anki.">
   <link rel="icon" href="icon.svg">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,700&family=JetBrains+Mono:wght@400;600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
@@ -14,53 +14,94 @@
 <main class="book">
   <nav>
     <a class="brand" href="./"><img src="icon.svg" alt="">dpdf</a>
-    <a href="docs.html">Docs</a>
+    <a href="docs.html">Documentação</a>
     <a href="https://github.com/diegorezm/dpdf">GitHub</a>
   </nav>
 
-  <h1>Just read<br>the <em>page.</em></h1>
-  <p class="lede">dpdf is a fast, minimal PDF reader for Windows. The page fills the screen, controls stay hidden until you need them, and nothing leaves your machine.</p>
-  <a class="button primary" href="https://github.com/diegorezm/dpdf/releases/latest">Download for Windows</a>
-  <a class="button" href="docs.html">Read the docs</a>
+  <h1>Estude a <em>página,</em><br>não o programa.</h1>
+  <p class="lede">dpdf é um leitor de PDF para Windows feito para quem passa horas no mesmo material: concursos, faculdade, certificações. Rápido, silencioso e todo seu. Nada sai do seu computador.</p>
+  <a class="button primary" href="https://github.com/diegorezm/dpdf/releases/latest">Baixar para Windows</a>
+  <a class="button" href="docs.html">Ler a documentação</a>
+  <p class="note">Grátis e de código aberto. Interface em português (ou inglês).</p>
 
-  <img class="shot hero-shot" src="shots/reader.png" alt="dpdf with a document, page thumbnails, and highlights">
+  <img class="shot hero-shot" src="shots/reader.png" alt="dpdf com um documento, miniaturas das páginas e grifos">
 
   <section class="feature">
-    <div><h2>Read with <em>a pen</em></h2><p>Select text, even across pages, to highlight it in five colors, underline, strike through, or attach a note. Double-click selects a line. The PDF itself is never touched.</p></div>
-    <img class="shot" src="shots/notes.png" alt="Adding a note to highlighted text" loading="lazy">
-  </section>
-  <section class="feature">
-    <div><h2>Find your <em>way</em></h2><p>The sidebar shows page thumbnails, the document's outline, or a list of your notes. Click to jump. Links work, and go to page understands labels like <code>iv</code>.</p></div>
-    <img class="shot" src="shots/outline.png" alt="Outline panel in the sidebar" loading="lazy">
-  </section>
-  <section class="feature">
-    <div><h2>Find it <em>fast</em></h2><p>Search the whole document with <kbd>Ctrl+F</kbd>. Matches light up on the page; <kbd>Enter</kbd> walks through them.</p></div>
-    <img class="shot" src="shots/search.png" alt="Search with highlighted matches" loading="lazy">
-  </section>
-  <section class="feature">
-    <div><h2>Every command, <em>one key</em></h2><p>The palette (<kbd>Ctrl+K</kbd>) reaches every action, open tab, session, recent file, and theme with fuzzy matching. Type a number to jump to that page.</p></div>
-    <img class="shot" src="shots/palette.png" alt="Command palette filtering themes" loading="lazy">
-  </section>
-  <section class="feature">
-    <div><h2>Nothing but <em>the page</em></h2><p>Focus mode (<kbd>Ctrl+.</kbd>) hides tabs, sidebar, and header. Just you and the text.</p></div>
-    <img class="shot" src="shots/focus.png" alt="Focus mode with only the page visible" loading="lazy">
-  </section>
-  <section class="feature">
-    <div><h2>Make it <em>yours</em></h2><p>Ten built-in themes, or your own in plain TOML. Interface font, text size, density, corners, and every keybinding too, with optional vim keys.</p></div>
-    <img class="shot" src="shots/themes.png" alt="dpdf with the light Paper theme" loading="lazy">
+    <div>
+      <h2>Grife com <em>intenção</em></h2>
+      <p>Cada cor tem um significado: importante, pegadinha, jurisprudência, ver depois, definição. Renomeie como quiser. Selecione o texto e aperte <kbd>1</kbd> a <kbd>5</kbd>; as miniaturas mostram onde estão as pegadinhas do capítulo.</p>
+    </div>
+    <div class="mock" aria-hidden="true">
+      <p class="mock-text">A investidura em cargo público depende de aprovação prévia em concurso, <mark class="red">ressalvadas as nomeações para cargo em comissão</mark>. O prazo de validade será de <mark class="yellow">até dois anos, prorrogável uma vez</mark>.</p>
+      <div class="mock-legend">
+        <span><i class="yellow"></i>1 Importante</span><span><i class="red"></i>5 Pegadinha</span><span><i class="green"></i>2 Jurisprudência</span><span><i class="blue"></i>3 Ver depois</span>
+      </div>
+    </div>
   </section>
 
-  <h2>And also</h2>
+  <section class="feature">
+    <div>
+      <h2>Saiba onde <em>parou</em></h2>
+      <p>Marque cada seção do sumário como lida, revisada uma vez, revisada duas (um clique ou <kbd>Ctrl+L</kbd>). A tela inicial mostra o progresso de cada matéria da sessão e quanto você estudou hoje e na semana.</p>
+    </div>
+    <div class="mock" aria-hidden="true">
+      <div class="mock-row"><span>Dir. Administrativo – Aula 03</span><b>44%</b></div><div class="bar"><i style="width:44%"></i></div><small>4 de 9 seções · 38 notas · 3h 10m</small>
+      <div class="mock-row"><span>Dir. Constitucional – Aula 07</span><b>71%</b></div><div class="bar"><i style="width:71%"></i></div><small>10 de 14 seções · 112 notas · 6h 45m</small>
+      <div class="mock-row"><span>Lei 8.112 compilada</span><b>20%</b></div><div class="bar"><i style="width:20%"></i></div><small>3 de 15 seções · 17 notas · 1h 05m</small>
+    </div>
+  </section>
+
+  <section class="feature">
+    <div>
+      <h2>Do PDF para o <em>Anki</em></h2>
+      <p><kbd>Ctrl+E</kbd> exporta seus grifos como um resumo em Markdown por seção e cor, um arquivo que o Anki importa como cartões (sua nota na frente, o trecho no verso) ou CSV. Escolha só as cores que importam, como as pegadinhas na véspera da prova.</p>
+    </div>
+    <pre class="mock mono" aria-hidden="true">## 2. Princípios
+
+### Pegadinha
+- "ressalvadas as nomeações para cargo
+  em comissão" (p. 12)
+  &gt; banca troca por "inclusive"
+
+### Importante
+- "até dois anos, prorrogável uma vez" (p. 12)</pre>
+  </section>
+
+  <section class="feature">
+    <div>
+      <h2>Ache em <em>todo</em> o material</h2>
+      <p><kbd>Ctrl+Shift+F</kbd> busca em todas as apostilas abertas de uma vez, sem se importar com acentos: <code>licitacao</code> acha <em>licitação</em>. Na lei seca, <kbd>Ctrl+P</kbd> e <code>art. 37</code> levam direto ao artigo.</p>
+    </div>
+    <img class="shot" src="shots/search.png" alt="Busca com as ocorrências destacadas" loading="lazy">
+  </section>
+
+  <section class="feature">
+    <div>
+      <h2>Só você e <em>o texto</em></h2>
+      <p>O modo foco (<kbd>Ctrl+.</kbd>) esconde abas, barra lateral e cabeçalho. O cronômetro conta o tempo em que você realmente lê, sem notificações, e pode ser desligado.</p>
+    </div>
+    <img class="shot" src="shots/focus.png" alt="Modo foco, só a página visível" loading="lazy">
+  </section>
+
+  <section class="feature">
+    <div>
+      <h2>Todo comando, <em>uma tecla</em></h2>
+      <p>A paleta (<kbd>Ctrl+K</kbd>) alcança cada ação, aba, sessão, arquivo recente e tema. Tudo tem atalho, e dá para usar as teclas do vim.</p>
+    </div>
+    <img class="shot" src="shots/palette.png" alt="Paleta de comandos" loading="lazy">
+  </section>
+
+  <h2>E também</h2>
   <div class="spread">
-    <div class="box"><h3>Sessions, like tmux</h3><p>Group tabs into named sessions: one for your thesis, one for a course. dpdf reattaches to the last one, each tab where you left it.</p></div>
-    <div class="box"><h3>Notes to Obsidian</h3><p>Export your notes as Markdown with properties, callouts linking back to the page, and stable block ids.</p></div>
-    <div class="box"><h3>Private</h3><p>No telemetry, no accounts. The only network call is an optional update check you can turn off.</p></div>
-    <div class="box"><h3>Native</h3><p>Rust, Slint, and PDFium. No browser engine inside, small binary, instant start. Opens a 1,000-page PDF without breaking a sweat.</p></div>
+    <div class="box"><h3>Uma sessão por matéria</h3><p>Agrupe as abas em sessões nomeadas, como no tmux: uma para Constitucional, outra para Português. O dpdf reabre a última, cada aba na página em que você parou.</p></div>
+    <div class="box"><h3>Notas no Obsidian</h3><p>Exporte em Markdown com propriedades, citações que linkam de volta à página e ids estáveis para referenciar.</p></div>
+    <div class="box"><h3>Privado</h3><p>Sem telemetria, sem conta, sem nuvem. Suas notas ficam no seu computador; o PDF nunca é alterado.</p></div>
+    <div class="box"><h3>Leve de verdade</h3><p>Rust, Slint e PDFium, sem navegador embutido. Abre uma apostila de mil páginas na hora.</p></div>
   </div>
 
-  <blockquote>Fast, lightweight, calm.<small>The dpdf philosophy</small></blockquote>
+  <blockquote>Rápido, leve, calmo.<small>A filosofia do dpdf</small></blockquote>
 
-  <footer>MIT licensed · <a href="https://github.com/diegorezm/dpdf">source on GitHub</a></footer>
+  <footer>Licença MIT · <a href="https://github.com/diegorezm/dpdf">código no GitHub</a></footer>
 </main>
 </body>
 </html>
