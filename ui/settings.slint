@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { KeyRow, ThemeCard } from "structs.slint";
+import { KeyRow, ThemeCard, HighlightRow } from "structs.slint";
 import { Toggle, Select, Button, TextButton, Field, Icon } from "widgets.slint";
 
 component NavItem inherits Rectangle {
@@ -184,6 +184,8 @@ export component SettingsView inherits Rectangle {
     in property <bool> sidebar;
     in property <bool> vim;
     in property <[KeyRow]> keys;
+    in property <[HighlightRow]> highlights;
+    in property <[color]> presets;
     in property <string> data-dir;
     in property <string> problems;
     in property <string> version;
@@ -458,6 +460,130 @@ export component SettingsView inherits Rectangle {
                                     toggled => {
                                         root.set("sidebar", root.sidebar ? "false" : "true");
                                     }
+                                }
+                            }
+                        }
+
+                        SectionTitle {
+                            text: "Highlights";
+                        }
+                        Text {
+                            text: "What each color means, shown in the notes panel and in exports. Keys 1–5 pick them in this order.";
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-small;
+                            wrap: word-wrap;
+                        }
+                        Card {
+                            for h[i] in root.highlights: Rectangle {
+                                height: highlight-row.preferred-height;
+
+                                highlight-row := VerticalLayout {
+                                    padding-left: 16px;
+                                    padding-right: 16px;
+                                    padding-top: 10px;
+                                    padding-bottom: 10px;
+                                    spacing: 8px;
+
+                                    HorizontalLayout {
+                                        spacing: 12px;
+
+                                        Text {
+                                            text: i + 1;
+                                            color: Theme.text-muted;
+                                            font-size: Theme.font-size-small;
+                                            vertical-alignment: center;
+                                            width: 10px;
+                                        }
+                                        Rectangle {
+                                            y: (parent.height - self.height) / 2;
+                                            width: 18px;
+                                            height: 18px;
+                                            border-radius: 9px;
+                                            background: h.color;
+                                        }
+                                        // Name: saved on Enter or when leaving the field.
+                                        Rectangle {
+                                            height: 30px;
+                                            horizontal-stretch: 1;
+                                            border-radius: Theme.radius;
+                                            border-width: 1px;
+                                            border-color: name-input.has-focus ? Theme.accent : Theme.border;
+
+                                            name-input := Field {
+                                                x: 10px;
+                                                width: parent.width - 20px;
+                                                text: h.name;
+                                                accepted => {
+                                                    root.set("color-name", h.key + "=" + self.text);
+                                                }
+                                                changed has-focus => {
+                                                    if !self.has-focus && self.text != h.name {
+                                                        root.set("color-name", h.key + "=" + self.text);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        // Shade as hex.
+                                        Rectangle {
+                                            height: 30px;
+                                            width: 90px;
+                                            border-radius: Theme.radius;
+                                            border-width: 1px;
+                                            border-color: hex-input.has-focus ? Theme.accent : Theme.border;
+
+                                            hex-input := Field {
+                                                x: 10px;
+                                                width: parent.width - 20px;
+                                                text: h.hex;
+                                                font-family: "Cascadia Mono, Consolas";
+                                                font-size: Theme.font-size-small;
+                                                accepted => {
+                                                    root.set("color-hex", h.key + "=" + self.text);
+                                                }
+                                                changed has-focus => {
+                                                    if !self.has-focus && self.text != h.hex {
+                                                        root.set("color-hex", h.key + "=" + self.text);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Preset shades.
+                                    HorizontalLayout {
+                                        padding-left: 52px;
+                                        spacing: 6px;
+                                        alignment: start;
+
+                                        for p[pi] in root.presets: Rectangle {
+                                            width: 16px;
+                                            height: 16px;
+                                            border-radius: 8px;
+                                            background: p;
+                                            border-width: preset-touch.has-hover || p == h.color ? 2px : 0;
+                                            border-color: Theme.text;
+
+                                            preset-touch := TouchArea {
+                                                mouse-cursor: pointer;
+                                                clicked => {
+                                                    root.set("color-hex", h.key + "=preset:" + pi);
+                                                }
+                                            }
+                                        }
+                                        TextButton {
+                                            text: "Default";
+                                            font-size: Theme.font-size-small;
+                                            clicked => {
+                                                root.set("color-hex", h.key + "=reset");
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if i < root.highlights.length - 1: Rectangle {
+                                    y: parent.height - 1px;
+                                    height: 1px;
+                                    background: Theme.border;
                                 }
                             }
                         }

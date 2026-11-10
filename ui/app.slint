@@ -1,12 +1,12 @@
 import { Theme } from "theme.slint";
-import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter, SubjectItem } from "structs.slint";
+import { PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter, SubjectItem, HighlightRow } from "structs.slint";
 import { Panel, Field, TextButton, Icon, Toggle, Button } from "widgets.slint";
 import { Sidebar, ReadingArea, StartScreen, TabBar } from "reader.slint";
 import { Palette } from "palette.slint";
 import { SettingsView } from "settings.slint";
 
 export { Theme }
-export { Highlight, Mark, PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter, SubjectItem } from "structs.slint";
+export { Highlight, Mark, PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter, SubjectItem, HighlightRow } from "structs.slint";
 
 export component AppWindow inherits Window {
     title: root.page-count > 0 ? "\{root.document-title} — dpdf" : "dpdf";
@@ -1070,6 +1070,8 @@ export component SettingsWindow inherits Window {
     in property <bool> sidebar-default;
     in property <bool> vim;
     in property <[KeyRow]> key-rows;
+    in property <[HighlightRow]> highlight-rows;
+    in property <[color]> highlight-presets;
     in property <string> data-dir;
     in property <string> problems;
     in property <string> version;
@@ -1116,6 +1118,8 @@ export component SettingsWindow inherits Window {
             sidebar: root.sidebar-default;
             vim: root.vim;
             keys: root.key-rows;
+            highlights: root.highlight-rows;
+            presets: root.highlight-presets;
             data-dir: root.data-dir;
             problems: root.problems;
             version: root.version;

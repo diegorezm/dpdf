@@ -116,6 +116,9 @@ pub struct Config {
     /// What each highlight color means, e.g. `red = "Trap"`. Shown in the
     /// notes filter and used in exports.
     pub color_names: BTreeMap<String, String>,
+    /// Replaces a highlight color's shade, e.g. `yellow = "#ffd23f"`.
+    /// Highlights keep their color key, so changing a shade recolors them.
+    pub highlight_colors: BTreeMap<String, String>,
     /// Overrides: action name -> key sequences, e.g. `open = ["ctrl+o"]`.
     /// An empty list unbinds the action.
     pub keys: BTreeMap<String, Vec<String>>,
@@ -140,6 +143,7 @@ impl Default for Config {
             notes_folder: String::new(),
             study_timer: true,
             color_names: default_color_names(),
+            highlight_colors: BTreeMap::new(),
             keys: BTreeMap::new(),
         }
     }
@@ -167,6 +171,14 @@ impl Config {
             _ => default_color_names()
                 .remove(color)
                 .unwrap_or_else(|| color.to_owned()),
+        }
+    }
+
+    /// The shade of a highlight color: the user's, if valid, or the default.
+    pub fn color_hex(&self, color: &str) -> String {
+        match self.highlight_colors.get(color) {
+            Some(hex) if parse_color(hex).is_some() => hex.trim().to_owned(),
+            _ => crate::annotations::color_hex(color).to_owned(),
         }
     }
 
@@ -250,6 +262,7 @@ const CONFIG_HEADER: &str = "\
 # Highlight colors: [color_names] names what each color means, e.g.
 #   [color_names]
 #   red = \"Trap\"
+# and [highlight_colors] their shades, e.g. red = \"#ef6b5f\".
 
 ";
 
@@ -523,5 +536,13 @@ green = \" \"",
         assert_eq!(config.color_name("green"), "Case law");
         assert_eq!(config.color_name("yellow"), "Important");
         assert_eq!(config.color_name("teal"), "teal");
+
+        let shades: Config =
+            toml::from_str("[highlight_colors]\nred = \"#112233\"\nblue = \"nope\"").unwrap();
+        assert_eq!(shades.color_hex("red"), "#112233");
+        assert_eq!(
+            shades.color_hex("blue"),
+            crate::annotations::color_hex("blue")
+        );
     }
 }

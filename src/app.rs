@@ -22,11 +22,16 @@ use crate::update;
 use crate::viewer::PageBuffer;
 use crate::viewer::{file_name, to_color, ui_int, PopupOutcome, SidePanel, Viewer};
 use crate::{
-    AppWindow, KeyRow, PaletteItem, RecentItem, SettingsWindow, SubjectItem, TabItem, Theme,
-    ThemeCard,
+    AppWindow, HighlightRow, KeyRow, PaletteItem, RecentItem, SettingsWindow, SubjectItem, TabItem,
+    Theme, ThemeCard,
 };
 
 const PALETTE_LIMIT: usize = 12;
+/// Shades offered for highlight colors in Settings; any hex works too.
+const HIGHLIGHT_PRESETS: [&str; 10] = [
+    "#f7d44c", "#ffa94d", "#ef6b5f", "#f28fb4", "#c49bf0", "#7fb2f0", "#5fd0d0", "#7fd18b",
+    "#b5c45a", "#a0a4ad",
+];
 /// Characters a session search needs before it starts.
 const MIN_SESSION_QUERY: usize = 3;
 const PALETTE_PLACEHOLDER: &str = "Search commands, tabs, files, themes, or type a page number…";
@@ -241,14 +246,33 @@ impl App {
 
         self.update_key_rows();
 
-        let names = crate::annotations::COLORS
-            .iter()
-            .map(|(color, _)| self.config.color_name(color))
-            .collect();
-        self.viewer.set_color_names(names);
+        self.apply_highlight_colors(window);
         self.viewer.set_default_zoom(self.config.default_zoom);
         self.viewer
             .set_inverted(window, self.config.page_colors == PageColors::Inverted);
+    }
+
+    fn apply_highlight_colors(&mut self, window: &AppWindow) {
+        let rows: Vec<HighlightRow> = crate::annotations::COLORS
+            .iter()
+            .map(|(color, _)| {
+                let hex = self.config.color_hex(color);
+                HighlightRow {
+                    key: (*color).into(),
+                    name: self.config.color_name(color).into(),
+                    color: to_color(&hex),
+                    hex: hex.into(),
+                }
+            })
+            .collect();
+        let names = rows.iter().map(|r| r.name.to_string()).collect();
+        let shades = rows.iter().map(|r| r.color).collect();
+        self.viewer.set_colors(window, names, shades);
+        let presets: Vec<slint::Color> = HIGHLIGHT_PRESETS.iter().map(|h| to_color(h)).collect();
+        self.settings
+            .set_highlight_presets(Rc::new(VecModel::from(presets)).into());
+        self.settings
+            .set_highlight_rows(Rc::new(VecModel::from(rows)).into());
     }
 
     fn update_key_rows(&self) {
@@ -358,6 +382,46 @@ impl App {
                 self.viewer.sidebar_shown(window);
             }
             "vim" => self.config.vim = on,
+            // "yellow=Important" and "yellow=#f7d44c".
+            "color-name" | "color-hex" => {
+                let Some((color, value)) = value.split_once('=') else {
+                    return;
+                };
+                let value = value.trim();
+                if !crate::annotations::COLORS.iter().any(|(c, _)| *c == color) {
+                    return;
+                }
+                if key == "color-name" {
+                    if value.is_empty() || self.config.color_name(color) == value {
+                        return;
+                    }
+                    self.config
+                        .color_names
+                        .insert(color.to_owned(), value.to_owned());
+                } else if let Some(preset) = value
+                    .strip_prefix("preset:")
+                    .and_then(|i| i.parse::<usize>().ok())
+                    .and_then(|i| HIGHLIGHT_PRESETS.get(i))
+                {
+                    self.config
+                        .highlight_colors
+                        .insert(color.to_owned(), (*preset).to_owned());
+                } else if value == "reset" {
+                    self.config.highlight_colors.remove(color);
+                } else {
+                    let hex = if value.starts_with('#') {
+                        value.to_owned()
+                    } else {
+                        format!("#{value}")
+                    };
+                    if config::parse_color(&hex).is_none() {
+                        return self.apply_highlight_colors(window);
+                    }
+                    self.config
+                        .highlight_colors
+                        .insert(color.to_owned(), hex.to_lowercase());
+                }
+            }
             "reset" => {
                 // Custom key bindings are hand-written in config.toml;
                 // restoring visual defaults shouldn't wipe them.
@@ -1491,7 +1555,7 @@ impl App {
 /// general, reading, theme, appearance, keybindings, files.
 const SECTION_WORDS: [&str; 6] = [
     "general session sessions restore startup tabs attach",
-    "reading zoom fit width page default sidebar thumbnails vim keyboard",
+    "reading zoom fit width page default sidebar thumbnails vim keyboard highlights colors names markers study",
     "theme themes colors dark light custom",
     "appearance interface font text size density spacing compact corners rounded thumbnails page colors inverted night dark",
     "keybindings keys shortcuts bindings vim",

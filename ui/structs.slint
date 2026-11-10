@@ -57,6 +57,15 @@ export struct SideItem {
     status: int,
 }
 
+// A highlight color in Settings: its key in annotation files, the name
+// the user gave it, and its shade.
+export struct HighlightRow {
+    key: string,
+    name: string,
+    color: color,
+    hex: string,
+}
+
 // A highlight color in the notes filter.
 export struct NoteFilter {
     name: string,

@@ -43,7 +43,7 @@ With **vim keys** on: `j` `k` `h` `l` scroll, `Ctrl+D` / `Ctrl+U` half screen, `
 
 dpdf has a few tools for studying, for exams for example, that stay out of the way when you don't use them.
 
-- **Colors with a meaning.** The five highlight colors have names, shown in the notes panel and in exports: yellow *Important*, green *Case law*, blue *Later*, pink *Definition*, red *Trap*. Rename them in `config.toml` (below). Page thumbnails show which colors a page has, and the notes panel can hide colors: click one to toggle it.
+- **Colors with a meaning.** The five highlight colors have names, shown in the notes panel and in exports: yellow *Important*, green *Case law*, blue *Later*, pink *Definition*, red *Trap*. Rename them and change their shades in Settings → Reading → Highlights (or in `config.toml`, below). Page thumbnails show which colors a page has, and the notes panel can hide colors: click one to toggle it.
 - **Progress.** In the outline, click the box next to a section (or press `Ctrl+L` in it) to mark it read, then reviewed once and twice. The outline shows how much of the document you've read; the home screen shows it for every tab in the session, with notes and study time.
 - **Export.** `Ctrl+E` exports the notes in the colors the notes panel shows: as a Markdown summary grouped by section and color (or the Obsidian format, grouped by page), as a file Anki imports as cards (*File › Import*; the note is the front, the quote the back, color and document are tags), or as CSV. Reviewing the cards is left to Anki or whatever app you use.
 - **Study time.** The header shows how long you've read today. Time counts while you use dpdf (pauses longer than five minutes don't count) and is kept per day and document in `study.txt`. Click it or press `Ctrl+T` to pause; `study_timer = false` hides it.
@@ -78,6 +78,9 @@ study_timer = false              # hide the study time in the header
 [color_names]                    # what each highlight color means
 red = "Pegadinha"
 green = "Jurisprudência"
+
+[highlight_colors]               # their shades
+red = "#ff5c5c"
 
 [keys]
 open = ["ctrl+o"]

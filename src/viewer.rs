@@ -183,6 +183,8 @@ pub struct Viewer {
     side_outline: Vec<usize>,
     /// What each highlight color means, in `annotations::COLORS` order.
     color_names: Vec<String>,
+    /// The shade of each highlight color, same order.
+    color_shades: Vec<Color>,
     /// Colors the notes list leaves out.
     hidden_colors: HashSet<String>,
     note_filters: Rc<VecModel<NoteFilter>>,
@@ -206,11 +208,6 @@ impl Viewer {
         window.set_side_items(side_items.clone().into());
         let note_filters = Rc::new(VecModel::default());
         window.set_note_filters(note_filters.clone().into());
-        let colors: Vec<Color> = annotations::COLORS
-            .iter()
-            .map(|(_, hex)| to_color(hex))
-            .collect();
-        window.set_annotation_colors(Rc::new(VecModel::from(colors)).into());
 
         let viewer = Self {
             worker,
@@ -256,6 +253,10 @@ impl Viewer {
             color_names: annotations::COLORS
                 .iter()
                 .map(|(name, _)| (*name).to_owned())
+                .collect(),
+            color_shades: annotations::COLORS
+                .iter()
+                .map(|(_, hex)| to_color(hex))
                 .collect(),
             hidden_colors: HashSet::new(),
             note_filters,
@@ -720,7 +721,7 @@ impl Viewer {
             .iter()
             .filter(|(name, _)| self.annotations.on_page(page).any(|a| a.color == *name))
             .take(3)
-            .map(|(_, hex)| to_color(hex))
+            .map(|(name, _)| self.shade(name))
             .collect();
         model_or_default(colors)
     }
@@ -957,7 +958,7 @@ impl Viewer {
                             title: truncate(&a.text, 140).into(),
                             detail: detail.into(),
                             depth: 0,
-                            color: to_color(annotations::color_hex(&a.color)),
+                            color: self.shade(&a.color),
                             has_color: true,
                             current: false,
                             status: -1,
@@ -977,7 +978,7 @@ impl Viewer {
         let filters: Vec<NoteFilter> = annotations::COLORS
             .iter()
             .zip(&self.color_names)
-            .filter_map(|((color, hex), name)| {
+            .filter_map(|((color, _), name)| {
                 let count = self
                     .annotations
                     .items
@@ -986,7 +987,7 @@ impl Viewer {
                     .count();
                 (count > 0).then(|| NoteFilter {
                     name: name.as_str().into(),
-                    color: to_color(hex),
+                    color: self.shade(color),
                     count: ui_int(count),
                     on: !self.hidden_colors.contains(*color),
                 })
@@ -995,9 +996,23 @@ impl Viewer {
         self.note_filters.set_vec(filters);
     }
 
-    pub fn set_color_names(&mut self, names: Vec<String>) {
+    /// Sets the highlight colors' names and shades, in `COLORS` order.
+    pub fn set_colors(&mut self, window: &AppWindow, names: Vec<String>, shades: Vec<Color>) {
         self.color_names = names;
+        self.color_shades = shades;
+        window.set_annotation_colors(Rc::new(VecModel::from(self.color_shades.clone())).into());
         self.update_side_items();
+        self.update_thumbs(window, true);
+        self.refresh(window);
+    }
+
+    /// The shade a highlight color is drawn in.
+    fn shade(&self, color: &str) -> Color {
+        annotations::COLORS
+            .iter()
+            .position(|(name, _)| *name == color)
+            .and_then(|i| self.color_shades.get(i).copied())
+            .unwrap_or_else(|| to_color(annotations::color_hex(color)))
     }
 
     /// Shows or hides a color in the notes list; `index` counts only the
@@ -1711,7 +1726,7 @@ impl Viewer {
     fn marks(&self, page: usize) -> ModelRc<Mark> {
         let mut items: Vec<Mark> = Vec::new();
         for a in self.annotations.on_page(page) {
-            let color = to_color(annotations::color_hex(&a.color));
+            let color = self.shade(&a.color);
             let kind = match a.kind {
                 Kind::Highlight => 0,
                 Kind::Underline => 1,
