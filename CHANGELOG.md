@@ -2,7 +2,7 @@
 
 All notable changes to Leme (called dpdf until 1.1.0). Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 1.2.0 — 2026-11-11
 
 ### Changed
 
