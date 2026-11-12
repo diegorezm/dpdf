@@ -1,0 +1,19 @@
+# Leme theme. Copy this file to %APPDATA%\leme\themes\ and edit it to make
+# your own. Colors are #rrggbb or #rrggbbaa. Missing keys fall back to the
+# built-in theme for the same `dark` value.
+#
+# Noite: iron-gall ink at night. One rubric red marks where you are.
+name = "Noite"
+dark = true
+
+background = "#15120e"
+surface = "#1b1713"
+raised = "#241f19"
+border = "#2f2921"
+text = "#e8dfcc"
+text_muted = "#9c907b"
+accent = "#d65a40"
+hover = "#e8dfcc0d"
+selection = "#d65a4055"
+match = "#d6a24055"
+match_current = "#d65a40aa"

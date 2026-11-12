@@ -1707,8 +1707,8 @@ fn ensure_theme_template(dir: &Path) {
     let _ = std::fs::create_dir_all(dir);
     let empty = std::fs::read_dir(dir).map_or(true, |mut d| d.next().is_none());
     if empty {
-        let template = include_str!("../themes/graphite.toml")
-            .replace("name = \"Graphite\"", "name = \"My Theme\"");
+        let template =
+            include_str!("../themes/noite.toml").replace("name = \"Noite\"", "name = \"My Theme\"");
         let _ = std::fs::write(dir.join("my-theme.toml"), template);
     }
 }
