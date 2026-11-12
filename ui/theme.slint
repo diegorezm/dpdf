@@ -1,17 +1,20 @@
+// Embedded only for the wordmark; the interface uses the system font.
+import "fonts/IMFellEnglish-Regular.ttf";
+
 // Design tokens. Colors are set from Rust from the active theme file;
 // the values here are only the fallback before that happens.
 export global Theme {
-    in-out property <color> background: #121316;
-    in-out property <color> surface: #17181c;
-    in-out property <color> raised: #1d1f24;
-    in-out property <color> border: #24262b;
-    in-out property <color> text: #d7d8dc;
-    in-out property <color> text-muted: #6c6f78;
-    in-out property <color> accent: #8fa8ff;
-    in-out property <color> hover: #ffffff0d;
-    in-out property <color> selection: #5b8cff55;
-    in-out property <color> match: #f5c54255;
-    in-out property <color> match-current: #f59b2a99;
+    in-out property <color> background: #15120e;
+    in-out property <color> surface: #1b1713;
+    in-out property <color> raised: #241f19;
+    in-out property <color> border: #2f2921;
+    in-out property <color> text: #e8dfcc;
+    in-out property <color> text-muted: #9c907b;
+    in-out property <color> accent: #d65a40;
+    in-out property <color> hover: #e8dfcc0d;
+    in-out property <color> selection: #d65a4055;
+    in-out property <color> match: #d6a24055;
+    in-out property <color> match-current: #d65a40aa;
 
     // Layout tokens, set from config.toml (`density`, `corners`,
     // `thumbnail_size`).
@@ -22,6 +25,7 @@ export global Theme {
     // Interface font, set from config.toml (`font`, `font_size`).
     in-out property <string> font-family: "Segoe UI Variable Text";
     in-out property <length> font-size: 14px;
+    out property <string> display-font: "IM FELL English";
     out property <length> font-size-small: root.font-size - 2px;
     out property <length> font-size-large: root.font-size + 2px;
 }

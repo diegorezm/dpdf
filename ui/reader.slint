@@ -373,6 +373,24 @@ export component StartScreen inherits Rectangle {
         width: min(parent.width - 64px, 460px);
         x: (parent.width - self.width) / 2;
 
+        // The wordmark: a rubricated initial, as in a manuscript.
+        HorizontalLayout {
+            alignment: center;
+
+            Text {
+                text: "L";
+                color: Theme.accent;
+                font-family: Theme.display-font;
+                font-size: 56px;
+            }
+            Text {
+                text: "eme";
+                color: Theme.text;
+                font-family: Theme.display-font;
+                font-size: 56px;
+            }
+        }
+
         Text {
             text: @tr("Open a PDF with Ctrl+O, or press Ctrl+K for everything else");
             color: Theme.text-muted;
