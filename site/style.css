@@ -1,13 +1,30 @@
+/* The app's Noite theme by default, Velino when the system is light. */
 :root {
-  --paper: #f5f4f0;
-  --paper-deep: #eae8e2;
-  --ink: #1d1f24;
-  --ink-soft: #5c5f68;
-  --line: #d4d2cb;
-  --cover: #17181c;
-  --serif: "Fraunces", Georgia, serif;
-  --sans: "Source Sans 3", system-ui, sans-serif;
+  --paper: #15120e;
+  --paper-deep: #1b1713;
+  --ink: #e8dfcc;
+  --ink-soft: #9c907b;
+  --line: #2f2921;
+  --rubric: #d65a40;
+  --sheet: #1b1713;
+  --mark: #d6a24055;
+  --display: "IM Fell English", Garamond, serif;
+  --serif: "Newsreader", Georgia, serif;
   --mono: "JetBrains Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --paper: #ede3cd;
+    --paper-deep: #e6dbc2;
+    --ink: #2a2118;
+    --ink-soft: #76684f;
+    --line: #d3c3a2;
+    --rubric: #a3301d;
+    --sheet: #f5eedd;
+    --mark: #c8902a55;
+    color-scheme: light;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -16,7 +33,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font: 17px/1.6 var(--sans);
+  font: 18px/1.6 var(--serif);
 }
 
 /* Content is centered for readability; the page itself spans the screen. */
@@ -30,7 +47,7 @@ body {
   display: block;
   width: 100%;
   border-radius: 8px;
-  box-shadow: 0 0 0 1px #0000001a, 0 20px 50px -20px #00000059;
+  border: 1px solid var(--line);
 }
 .hero-shot { margin-top: 56px; }
 
@@ -53,30 +70,34 @@ nav {
   margin-bottom: 64px;
   font-size: 15px;
 }
-nav .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; font: 600 18px var(--mono); }
+nav .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; font: 28px/1 var(--display); }
+nav .brand b { font-weight: 400; color: var(--rubric); margin-right: -10px; }
+nav { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+nav a:not(.brand) { color: var(--ink-soft); }
 nav img { width: 28px; height: 28px; }
 a { color: var(--ink); }
 nav a { text-decoration: none; }
 nav a:hover { text-decoration: underline; }
 
-h1, h2, h3 { font-family: var(--serif); font-weight: 400; line-height: 1.1; margin: 0 0 16px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; line-height: 1.1; margin: 0 0 16px; }
 h1 { font-size: clamp(44px, 8vw, 76px); }
-h1 em, h2 em { font-weight: 700; color: #3d5bd9; }
+h1 em, h2 em { color: var(--rubric); }
+h1 { text-wrap: balance; }
 h2 { font-size: 34px; margin-top: 56px; }
-h3 { font-size: 22px; font-weight: 600; }
+h3 { font-size: 23px; }
 
-.lede { max-width: 560px; font-style: italic; color: var(--ink-soft); font-size: 19px; }
+.lede { max-width: 560px; color: var(--ink-soft); font-size: 19px; }
 
 .button {
   display: inline-block;
   margin: 24px 16px 0 0;
   padding: 10px 20px;
-  border: 1px solid var(--ink);
-  border-radius: 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 500;
 }
-.button.primary { background: var(--ink); color: var(--paper); }
+.button.primary { background: var(--rubric); border-color: var(--rubric); color: var(--paper); }
 
 .spread { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 40px; margin-top: 24px; }
 .box { border: 1px solid var(--line); padding: 20px 24px; }
@@ -86,18 +107,19 @@ h3 { font-size: 22px; font-weight: 600; }
 blockquote {
   margin: 64px 0 0;
   text-align: right;
-  font: 600 22px var(--serif);
+  font: italic 26px var(--display);
+  color: var(--ink-soft);
 }
 blockquote small {
   display: block;
   margin-top: 4px;
-  font: 600 11px var(--sans);
+  font: 11px var(--mono);
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
 
-code, kbd { font: 14px var(--mono); background: var(--paper-deep); padding: 1px 5px; border-radius: 3px; }
+code, kbd { font: 14px var(--mono); background: var(--paper-deep); border: 1px solid var(--line); padding: 1px 5px; border-radius: 3px; }
 pre { background: var(--paper-deep); border: 1px solid var(--line); padding: 16px; overflow-x: auto; }
 pre code { background: none; padding: 0; }
 
@@ -108,30 +130,31 @@ footer { margin-top: 80px; padding-top: 20px; border-top: 1px solid var(--line);
 
 .note { margin: 14px 0 0; font-size: 14px; color: var(--ink-soft); }
 
-/* Small pieces of the leme interface, drawn in its dark theme. */
+/* Small pieces of the Leme interface, in the page's own theme. */
 .mock {
   margin: 0;
   padding: 24px 28px;
   border-radius: 8px;
-  background: var(--cover);
-  color: #d7d8dc;
-  box-shadow: 0 0 0 1px #0000001a, 0 20px 50px -20px #00000059;
+  background: var(--paper-deep);
+  color: var(--ink);
+  border: 1px solid var(--line);
   font-size: 15px;
 }
 .mock.mono { font: 14px/1.6 var(--mono); white-space: pre-wrap; }
-.mock-text { margin: 0; padding: 20px 24px; background: #f4f3ef; color: #23242a; border-radius: 2px; font: 17px/1.7 Georgia, serif; }
-.mock mark { color: inherit; padding: 1px 2px; border-radius: 2px; }
+.mock-text { margin: 0; padding: 20px 24px; background: var(--sheet); color: var(--ink); border: 1px solid var(--line); font: 17px/1.7 var(--serif); }
+.mock-text::first-letter { font: 3em/0.8 var(--display); color: var(--rubric); float: left; padding: 4px 6px 0 0; }
+.mock mark { color: inherit; padding: 1px 2px; border-bottom: 1px solid var(--rubric); }
 .mock mark.red { background: #ef6b5f66; }
 .mock mark.yellow { background: #f7d44c80; }
-.mock-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 16px; font-size: 13px; color: #9a9da6; }
+.mock-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 16px; font-size: 13px; color: var(--ink-soft); }
 .mock-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 i.yellow { background: #f7d44c; } i.red { background: #ef6b5f; } i.green { background: #7fd18b; } i.blue { background: #7fb2f0; }
 .mock-row { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; }
 .mock-row:first-child { margin-top: 0; }
-.mock-row b { font-weight: 400; color: #6c6f78; font-size: 13px; }
-.mock .bar { height: 3px; margin: 6px 0 4px; background: #24262b; border-radius: 2px; }
-.mock .bar i { display: block; height: 100%; background: #8fa8ff; border-radius: 2px; }
-.mock small { color: #6c6f78; font-size: 13px; }
+.mock-row b { font-weight: 400; color: var(--ink-soft); font-size: 13px; }
+.mock .bar { height: 3px; margin: 6px 0 4px; background: var(--line); border-radius: 2px; }
+.mock .bar i { display: block; height: 100%; background: var(--rubric); border-radius: 2px; }
+.mock small { color: var(--ink-soft); font-size: 13px; }
 
 @media (max-width: 720px) {
   .book { padding: 32px 16px; }
