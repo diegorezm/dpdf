@@ -1,0 +1,15 @@
+# Velino: warm vellum by day, with the same rubric red as Noite.
+name = "Velino"
+dark = false
+
+background = "#ede3cd"
+surface = "#e6dbc2"
+raised = "#f5eedd"
+border = "#d3c3a2"
+text = "#2a2118"
+text_muted = "#76684f"
+accent = "#a3301d"
+hover = "#2a21180d"
+selection = "#a3301d33"
+match = "#c8902a55"
+match_current = "#a3301d77"

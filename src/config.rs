@@ -129,7 +129,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            theme: "Graphite".to_owned(),
+            theme: "Noite".to_owned(),
             language: "pt-BR".to_owned(),
             page_colors: PageColors::Original,
             default_zoom: DefaultZoom::FitWidth,
@@ -309,7 +309,8 @@ fn default_true() -> bool {
     true
 }
 
-const BUILT_IN: [&str; 10] = [
+const BUILT_IN: [&str; 12] = [
+    include_str!("../themes/noite.toml"),
     include_str!("../themes/graphite.toml"),
     include_str!("../themes/catppuccin-mocha.toml"),
     include_str!("../themes/gruvbox.toml"),
@@ -320,6 +321,7 @@ const BUILT_IN: [&str; 10] = [
     include_str!("../themes/catppuccin-latte.toml"),
     include_str!("../themes/paper.toml"),
     include_str!("../themes/sepia.toml"),
+    include_str!("../themes/velino.toml"),
 ];
 
 pub fn built_in_themes() -> Vec<ThemeDef> {
@@ -520,7 +522,7 @@ mod tests {
 
         let partial: Config = toml::from_str("vim = true").unwrap();
         assert!(partial.vim);
-        assert_eq!(partial.theme, "Graphite");
+        assert_eq!(partial.theme, "Noite");
         assert!(partial.study_timer);
     }
 

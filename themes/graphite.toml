@@ -1,6 +1,3 @@
-# dpdf theme. Copy this file to %APPDATA%\dpdf\themes\ and edit it to make
-# your own. Colors are #rrggbb or #rrggbbaa. Missing keys fall back to the
-# built-in theme for the same `dark` value.
 name = "Graphite"
 dark = true
 
