@@ -1,4 +1,4 @@
-//! User configuration and themes, as TOML files in `%APPDATA%\dpdf\`:
+//! User configuration and themes, as TOML files in `%APPDATA%\leme\`:
 //!
 //! - `config.toml`: preferences and keybindings.
 //! - `themes\*.toml`: extra or overriding themes, same format as the
@@ -249,7 +249,7 @@ impl Config {
 }
 
 const CONFIG_HEADER: &str = "\
-# dpdf configuration. Changes made in Settings are written here too.
+# Leme configuration. Changes made in Settings are written here too.
 # Reload with the \"Reload config\" command (Ctrl+K).
 #
 # Keybindings: [keys] maps an action to key sequences, e.g.
@@ -431,7 +431,25 @@ pub fn parse_color(text: &str) -> Option<[u8; 4]> {
 }
 
 pub fn data_dir() -> Option<PathBuf> {
-    Some(PathBuf::from(std::env::var_os("APPDATA")?).join("dpdf"))
+    Some(PathBuf::from(std::env::var_os("APPDATA")?).join("leme"))
+}
+
+/// Moves the folders of dpdf, the app's former name, to their new place
+/// once, so an upgrade keeps settings, notes, and history. Leaves both
+/// alone when the new folder already exists.
+pub fn migrate_legacy_dirs() {
+    for var in ["APPDATA", "LOCALAPPDATA"] {
+        if let Some(base) = std::env::var_os(var).map(PathBuf::from) {
+            let _ = move_dir(&base.join("dpdf"), &base.join("leme"));
+        }
+    }
+}
+
+fn move_dir(from: &std::path::Path, to: &std::path::Path) -> io::Result<()> {
+    if from.is_dir() && !to.exists() {
+        fs::rename(from, to)?;
+    }
+    Ok(())
 }
 
 pub fn themes_dir() -> Option<PathBuf> {
@@ -461,6 +479,22 @@ mod tests {
                 assert!(parse_color(color).is_some(), "{}: {color}", theme.name);
             }
         }
+    }
+
+    #[test]
+    fn legacy_dir_moves_only_when_new_one_is_missing() {
+        let base = std::env::temp_dir().join(format!("leme-migrate-{}", std::process::id()));
+        let (old, new) = (base.join("dpdf"), base.join("leme"));
+        fs::create_dir_all(&old).unwrap();
+        fs::write(old.join("state.txt"), "x").unwrap();
+        move_dir(&old, &new).unwrap();
+        assert!(!old.exists());
+        assert_eq!(fs::read_to_string(new.join("state.txt")).unwrap(), "x");
+
+        fs::create_dir_all(&old).unwrap();
+        move_dir(&old, &new).unwrap();
+        assert!(old.exists());
+        fs::remove_dir_all(&base).unwrap();
     }
 
     #[test]

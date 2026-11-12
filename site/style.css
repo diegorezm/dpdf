@@ -108,7 +108,7 @@ footer { margin-top: 80px; padding-top: 20px; border-top: 1px solid var(--line);
 
 .note { margin: 14px 0 0; font-size: 14px; color: var(--ink-soft); }
 
-/* Small pieces of the dpdf interface, drawn in its dark theme. */
+/* Small pieces of the leme interface, drawn in its dark theme. */
 .mock {
   margin: 0;
   padding: 24px 28px;

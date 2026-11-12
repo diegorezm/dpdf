@@ -1147,23 +1147,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
-name = "dpdf"
-version = "1.1.0"
-dependencies = [
- "clipboard-win",
- "lopdf",
- "pdfium-render",
- "raw-window-handle",
- "rfd",
- "serde",
- "slint",
- "slint-build",
- "toml",
- "ttf-parser",
- "winresource",
-]
-
-[[package]]
 name = "dpi"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2649,6 +2632,23 @@ name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
+
+[[package]]
+name = "leme"
+version = "1.1.0"
+dependencies = [
+ "clipboard-win",
+ "lopdf",
+ "pdfium-render",
+ "raw-window-handle",
+ "rfd",
+ "serde",
+ "slint",
+ "slint-build",
+ "toml",
+ "ttf-parser",
+ "winresource",
+]
 
 [[package]]
 name = "libc"

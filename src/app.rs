@@ -1564,7 +1564,7 @@ impl App {
                 }
             }
             Ok(None) if manual => {
-                window.set_status("dpdf is up to date".into());
+                window.set_status("Leme is up to date".into());
                 clear_status_later(window);
             }
             Err(err) if manual => {
@@ -1583,7 +1583,7 @@ impl App {
         };
         match action {
             "install" if update::installed() => {
-                window.set_status(trf("Downloading dpdf {}…", &[&release.version]).into());
+                window.set_status(trf("Downloading Leme {}…", &[&release.version]).into());
                 crate::download_update(window, release);
             }
             // A portable copy: let the user fetch the new zip.

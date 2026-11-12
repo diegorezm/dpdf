@@ -49,7 +49,7 @@ fn provide_pdfium() -> Result<(), String> {
         download(&cache_dir)?;
     }
     let dest = profile_dir.join("pdfium.dll");
-    // Skip when already in place: the DLL is locked while dpdf is running.
+    // Skip when already in place: the DLL is locked while Leme is running.
     let size = |p: &Path| fs::metadata(p).map(|m| m.len()).ok();
     if size(&dest).is_none() || size(&dest) != size(&dll) {
         fs::copy(&dll, dest).map_err(|e| e.to_string())?;

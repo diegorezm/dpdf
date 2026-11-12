@@ -1,5 +1,5 @@
 //! Interface language. English is the source language; Brazilian
-//! Portuguese comes from `translations/pt-BR/LC_MESSAGES/dpdf.po`, the same
+//! Portuguese comes from `translations/pt-BR/LC_MESSAGES/leme.po`, the same
 //! file Slint bundles for the `.slint` markup, so each text is translated
 //! once for both.
 //!
@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
-const PT_BR_PO: &str = include_str!("../translations/pt-BR/LC_MESSAGES/dpdf.po");
+const PT_BR_PO: &str = include_str!("../translations/pt-BR/LC_MESSAGES/leme.po");
 
 /// Languages offered in Settings: config value and the name shown.
 pub const LANGUAGES: [(&str, &str); 2] = [("pt-BR", "Português (Brasil)"), ("en", "English")];
@@ -80,7 +80,7 @@ pub fn untr(text: &str) -> String {
 }
 
 /// Reads `msgid` / `msgstr` pairs, including strings continued on
-/// following lines. Plural forms and contexts aren't used by dpdf.
+/// following lines. Plural forms and contexts aren't used by leme.
 fn parse_po(text: &str) -> HashMap<String, String> {
     #[derive(PartialEq)]
     enum Field {

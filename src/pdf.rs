@@ -1721,14 +1721,14 @@ mod tests {
         assert_eq!(px, [24, 230, 126, 77]);
     }
 
-    /// Timings for a large document: `DPDF_BENCH_PDF=<file> cargo test
+    /// Timings for a large document: `LEME_BENCH_PDF=<file> cargo test
     /// --release bench_document -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn bench_document() {
         use std::time::Instant;
-        let (Ok(pdfium), Ok(path)) = (bind(), std::env::var("DPDF_BENCH_PDF")) else {
-            eprintln!("needs PDFium and DPDF_BENCH_PDF");
+        let (Ok(pdfium), Ok(path)) = (bind(), std::env::var("LEME_BENCH_PDF")) else {
+            eprintln!("needs PDFium and LEME_BENCH_PDF");
             return;
         };
         let ms = |t: Instant| t.elapsed().as_secs_f64() * 1000.0;

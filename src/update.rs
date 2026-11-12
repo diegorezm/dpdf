@@ -1,17 +1,17 @@
-//! Update check against GitHub releases. The only network access dpdf
+//! Update check against GitHub releases. The only network access Leme
 //! makes, and only to github.com: one request on startup (when
 //! `check_updates` is on) or when asked from the palette. Nothing is
 //! downloaded until the user says yes.
 //!
 //! Requests go through Windows' own `curl.exe` (System32, Windows 10+),
-//! so dpdf carries no HTTP or TLS stack of its own.
+//! so Leme carries no HTTP or TLS stack of its own.
 
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const REPO: &str = "https://github.com/diegorezm/dpdf";
+const REPO: &str = "https://github.com/diegorezm/leme";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Release {
@@ -25,7 +25,7 @@ impl Release {
     }
 
     fn installer_name(&self) -> String {
-        format!("dpdf-{}-setup.exe", self.version)
+        format!("leme-{}-setup.exe", self.version)
     }
 
     fn asset_url(&self, name: &str) -> String {
@@ -80,7 +80,7 @@ pub fn download(release: &Release) -> io::Result<PathBuf> {
     Ok(target)
 }
 
-/// Starts the installer quietly; it closes dpdf and opens it again when
+/// Starts the installer quietly; it closes Leme and opens it again when
 /// done. The caller should quit right after.
 pub fn install(installer: &Path) -> io::Result<()> {
     Command::new(installer)
@@ -117,7 +117,7 @@ pub fn skip(release: &Release) -> io::Result<()> {
 fn skip_file() -> Option<PathBuf> {
     Some(
         PathBuf::from(std::env::var_os("LOCALAPPDATA")?)
-            .join("dpdf")
+            .join("leme")
             .join("skipped-update.txt"),
     )
 }
@@ -192,10 +192,10 @@ mod tests {
     #[test]
     fn versions() {
         assert_eq!(
-            version_from_url("https://github.com/d/dpdf/releases/tag/v1.10.0\n").as_deref(),
+            version_from_url("https://github.com/d/leme/releases/tag/v1.10.0\n").as_deref(),
             Some("1.10.0")
         );
-        assert_eq!(version_from_url("https://github.com/d/dpdf/releases"), None);
+        assert_eq!(version_from_url("https://github.com/d/leme/releases"), None);
         assert_eq!(version_from_url("https://x/releases/tag/vnext"), None);
         assert!(is_newer("1.10.0", "1.9.3"));
         assert!(is_newer("2.0", "1.9.9"));
@@ -208,10 +208,10 @@ mod tests {
     fn checksums() {
         let hash = "a".repeat(64);
         let sums = format!(
-            "{hash}  dpdf-1.1.0-setup.exe\n{}  other.zip\n",
+            "{hash}  leme-1.1.0-setup.exe\n{}  other.zip\n",
             "b".repeat(64)
         );
-        assert_eq!(checksum_for(&sums, "dpdf-1.1.0-setup.exe"), Some(hash));
+        assert_eq!(checksum_for(&sums, "leme-1.1.0-setup.exe"), Some(hash));
         assert_eq!(checksum_for(&sums, "missing.exe"), None);
     }
 }

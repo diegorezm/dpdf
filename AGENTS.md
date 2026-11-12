@@ -1,14 +1,14 @@
 # AGENTS.md
 
-Guidance for coding agents (and humans) working on **dpdf**. Read this before changing anything.
+Guidance for coding agents (and humans) working on **Leme**. Read this before changing anything.
 
 ---
 
-## 1. What dpdf is and why it exists
+## 1. What Leme is and why it exists
 
-`dpdf` is a personal, local-first desktop PDF reader for Windows. It exists because mainstream PDF apps are bloated, slow, visually generic, and full of features that get in the way of reading.
+`leme` is a personal, local-first desktop PDF reader for Windows. It exists because mainstream PDF apps are bloated, slow, visually generic, and full of features that get in the way of reading.
 
-dpdf is **not** an Acrobat/Foxit replacement or a PDF office suite. It is a **fast, minimal, beautiful, keyboard-friendly reader** that feels immediate and stays out of the way. The document is the interface: the page fills the screen, and controls, panels, and overlays stay hidden until needed.
+Leme is **not** an Acrobat/Foxit replacement or a PDF office suite. It is a **fast, minimal, beautiful, keyboard-friendly reader** that feels immediate and stays out of the way. The document is the interface: the page fills the screen, and controls, panels, and overlays stay hidden until needed.
 
 ## 2. Product philosophy (non-negotiable)
 
@@ -58,13 +58,13 @@ PDFium is loaded at runtime as `pdfium.dll`, first from the executable's directo
 ## 6. Intentionally deferred (or rejected)
 
 Built after the MVP, because they serve the core use (studying documents):
-- Tabs and named sessions (tmux-like: each session has its own tabs; dpdf reattaches to the last one on startup).
+- Tabs and named sessions (tmux-like: each session has its own tabs; Leme reattaches to the last one on startup).
 - Annotations (highlight, underline, strikethrough, notes) stored outside the PDF, with Markdown export.
-- Study tools: named highlight colors, a notes filter, section progress, a study timer, session search, Anki/CSV export. Spaced repetition itself stays out: dpdf exports, a dedicated app reviews.
+- Study tools: named highlight colors, a notes filter, section progress, a study timer, session search, Anki/CSV export. Spaced repetition itself stays out: Leme exports, a dedicated app reviews.
 - Focus mode, command palette, TOML themes and keybindings, optional vim keys.
 - Outline and notes panels in the sidebar, clickable links, page labels, password-protected PDFs.
 
-Customizability is part of dpdf's identity: themes and keys are plain files, and every action is reachable from the palette. New options still have to earn their place; prefer a file-only option over another visible control.
+Customizability is part of Leme's identity: themes and keys are plain files, and every action is reachable from the palette. New options still have to earn their place; prefer a file-only option over another visible control.
 
 Deferred — may come later, must stay optional, local, and non-intrusive:
 - Bookmarks UI.
@@ -117,7 +117,7 @@ Core defaults: `Ctrl+O` open, `Ctrl+K` palette, `Ctrl+F` search, `Ctrl+Shift+F` 
 - No polling loops, no background work while idle.
 - Targets (guidelines, measure before claiming): cold start to window < 300 ms; idle RSS with no document < 50 MB; release binary stays small (`lto`, `strip`, `opt-level`).
 - Any change touching rendering, caching, or scrolling should state its performance impact in the commit/PR. Prefer `perf:` commits with before/after numbers.
-- Measure with the ignored benchmark test (open, render, invert, search, labels): `DPDF_BENCH_PDF=<file.pdf> cargo test --release bench_document -- --ignored --nocapture`.
+- Measure with the ignored benchmark test (open, render, invert, search, labels): `LEME_BENCH_PDF=<file.pdf> cargo test --release bench_document -- --ignored --nocapture`.
 - Possible improvements, not worth it yet (measure first):
   - Free the `lopdf` document used by `recover.rs` when its document leaves the front tab, keeping recovered glyphs. Saves about the file size per recent tab with broken fonts; costs one re-parse when selecting a new page there later.
   - Tiled rendering past the 24 MP render cap, so deep zoom stays sharp.
@@ -156,7 +156,7 @@ ui/
   structs.slint   // data passed from Rust
   theme.slint     // design tokens (global Theme, colors set from Rust)
 themes/           // built-in themes, embedded at compile time
-translations/     // pt-BR/LC_MESSAGES/dpdf.po: Portuguese for both .slint (@tr) and Rust (i18n::tr)
+translations/     // pt-BR/LC_MESSAGES/leme.po: Portuguese for both .slint (@tr) and Rust (i18n::tr)
 ```
 
 The PDF worker processes one small unit at a time (text selection > page render > search one page > thumbnail) and checks for new requests between units, so new requests replace stale work. Tabs share one live document view. The worker keeps the last few documents open and the viewer keeps their exact scroll position and nearby rendered pages, so switching between recent tabs is instant; older tabs reopen from disk, which keeps memory bounded no matter how many tabs are open.
@@ -165,9 +165,9 @@ Rules:
 - `.slint` files expose properties and callbacks; they contain no business logic beyond trivial layout/visibility bindings.
 - `pdf`, `recover`, `layout`, `cache`, `nav`, `keymap`, `palette`, `search`, `annotations`, `export`, `study`, `config`, `store` must not depend on Slint UI types, so they are unit-testable (`keymap` only uses Slint's key constants). Only `main.rs`, `app.rs`, and `viewer.rs` touch Slint types.
 - State flows one way: UI callback → `Action` → controller updates state → controller pushes properties to UI.
-- Paths: everything user-owned lives in `%APPDATA%\dpdf` (`config.toml`, `themes\`, `annotations\`, `state.txt`, `study.txt`); caches go in `%LOCALAPPDATA%\dpdf`. Never write next to the executable, in the document folder, or into the PDF.
+- Paths: everything user-owned lives in `%APPDATA%\leme` (`config.toml`, `themes\`, `annotations\`, `state.txt`, `study.txt`); caches go in `%LOCALAPPDATA%\leme`. Never write next to the executable, in the document folder, or into the PDF.
 - User files must never block startup: parse leniently, fall back to defaults, and report problems in Settings.
-- Every user-visible text is English in the source and translated: `@tr("…")` in `.slint`, `i18n::tr` / `trf` in Rust (`{}` placeholders, like `@tr`). Add each new text to `translations/pt-BR/LC_MESSAGES/dpdf.po`; a test checks placeholders match. Brazilian Portuguese is the default language.
+- Every user-visible text is English in the source and translated: `@tr("…")` in `.slint`, `i18n::tr` / `trf` in Rust (`{}` placeholders, like `@tr`). Add each new text to `translations/pt-BR/LC_MESSAGES/leme.po`; a test checks placeholders match. Brazilian Portuguese is the default language.
 - Grow the module tree when needed; do not create empty modules ahead of time.
 
 ## 11. Coding standards
@@ -204,7 +204,7 @@ cargo run                                   # debug build and launch
 cargo test                                  # run tests
 cargo fmt --all                             # format
 cargo clippy --all-targets -- -D warnings   # lint
-cargo build --release                       # optimized build -> target/release/dpdf
+cargo build --release                       # optimized build -> target/release/leme
 ```
 
 Run `fmt`, `clippy`, `test`, and `build` before every commit.
@@ -216,7 +216,7 @@ Run `fmt`, `clippy`, `test`, and `build` before every commit.
 - The project must build before every commit; run fmt/clippy when applicable.
 - Never commit `target/`, build artifacts, local secrets, `.env`, editor folders (`.vscode/`, `.idea/`), or OS junk.
 - `main` must always build. Use feature branches + PRs for non-trivial work.
-- Repository: public GitHub repo `dpdf`, MIT licensed. Use the `gh` CLI for GitHub operations; if it is unauthenticated, stop and tell the user rather than using another method.
+- Repository: public GitHub repo `leme`, MIT licensed. Use the `gh` CLI for GitHub operations; if it is unauthenticated, stop and tell the user rather than using another method.
 
 ## 14. Definition of done
 

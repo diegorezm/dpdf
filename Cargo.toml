@@ -1,10 +1,10 @@
 [package]
-name = "dpdf"
+name = "leme"
 version = "1.1.0"
 edition = "2021"
 description = "A fast, minimal, local-first PDF reader for Windows, built with Rust and Slint."
 license = "MIT"
-repository = "https://github.com/diegorezm/dpdf"
+repository = "https://github.com/diegorezm/leme"
 publish = false
 
 [dependencies]
@@ -25,7 +25,7 @@ ttf-parser = { version = "0.25", default-features = false, features = ["std", "o
 
 [build-dependencies]
 slint-build = "1.18"
-# Embeds the icon and version info in dpdf.exe (Explorer, taskbar, installer).
+# Embeds the icon and version info in leme.exe (Explorer, taskbar, installer).
 winresource = { version = "0.1", default-features = false }
 
 # Debug builds still optimize dependencies (Slint, PDFium bindings), so

@@ -90,6 +90,7 @@ fn index(value: i32) -> usize {
 }
 
 fn main() -> Result<(), slint::PlatformError> {
+    config::migrate_legacy_dirs();
     let window = AppWindow::new()?;
 
     let weak = window.as_weak();
@@ -113,7 +114,7 @@ fn main() -> Result<(), slint::PlatformError> {
         check_for_update(&window, false);
     }
 
-    // `dpdf file.pdf`, which is also how "Open with" passes files on Windows.
+    // `leme file.pdf`, which is also how "Open with" passes files on Windows.
     for path in std::env::args_os().skip(1) {
         with_app(|app| app.open_path(&window, path.into()));
     }
