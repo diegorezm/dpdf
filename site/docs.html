@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>dpdf — documentação</title>
+  <title>Leme — documentação</title>
   <link rel="icon" href="icon.svg">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,700&family=JetBrains+Mono:wght@400;600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
@@ -12,17 +12,17 @@
 <body>
 <main class="book">
   <nav>
-    <a class="brand" href="./"><img src="icon.svg" alt="">dpdf</a>
+    <a class="brand" href="./"><img src="icon.svg" alt="">Leme</a>
     <a href="docs.html">Documentação</a>
-    <a href="https://github.com/diegorezm/dpdf">GitHub</a>
+    <a href="https://github.com/diegorezm/leme">GitHub</a>
   </nav>
   <article id="doc"><p>Loading…</p></article>
-  <footer>Generated from the project's <a href="https://github.com/diegorezm/dpdf/blob/main/DOCS.md">DOCS.md</a>.</footer>
+  <footer>Generated from the project's <a href="https://github.com/diegorezm/leme/blob/main/DOCS.md">DOCS.md</a>.</footer>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
 <script>
   // The docs are DOCS.md, copied next to this page at deploy time.
-  const repo = "https://github.com/diegorezm/dpdf/blob/main/";
+  const repo = "https://github.com/diegorezm/leme/blob/main/";
   const doc = document.getElementById("doc");
   fetch("DOCS.md")
     .then((r) => r.text())

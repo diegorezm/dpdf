@@ -1,5 +1,5 @@
 //! Study time: how long each document was read, per day, saved in
-//! `%APPDATA%\dpdf\study.txt`.
+//! `%APPDATA%\leme\study.txt`.
 //!
 //! Time is counted from activity, not with a running timer: each key,
 //! scroll, or click adds the time since the previous one, unless that gap

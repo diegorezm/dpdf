@@ -1,5 +1,5 @@
 //! Notes exported for other tools: Markdown for notes apps, a TSV file
-//! Anki imports as cards, and CSV for anything else. dpdf only writes the
+//! Anki imports as cards, and CSV for anything else. Leme only writes the
 //! file; studying the cards happens in the app that reads it.
 
 use std::fmt::Write as _;
@@ -172,7 +172,7 @@ fn anki(items: &[&Annotation], opts: &Options) -> String {
         } else {
             format!("{}<br><small>{}</small>", html(a.note.trim()), html(&place))
         };
-        let tags = format!("dpdf {doc_tag} {}", tag(opts.color_name(&a.color)));
+        let tags = format!("leme {doc_tag} {}", tag(opts.color_name(&a.color)));
         let _ = writeln!(out, "{front}\t{}\t{tags}", html(&one_line(&a.text)));
     }
     out
@@ -343,11 +343,11 @@ mod tests {
         );
         assert_eq!(
             lines[3],
-            "banca troca &lt;isso&gt;<br><small>Aula 03 · Princípios · p. 12</small>\taos estrangeiros, na forma da lei\tdpdf Aula_03 Trap"
+            "banca troca &lt;isso&gt;<br><small>Aula 03 · Princípios · p. 12</small>\taos estrangeiros, na forma da lei\tleme Aula_03 Trap"
         );
         assert_eq!(
             lines[4],
-            "Aula 03 · Princípios · p. 31\tex tunc\tdpdf Aula_03 Trap"
+            "Aula 03 · Princípios · p. 31\tex tunc\tleme Aula_03 Trap"
         );
         assert_eq!(lines.len(), 5);
     }

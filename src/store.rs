@@ -1,5 +1,5 @@
 //! Reading history and sessions, saved as a small text file in
-//! `%APPDATA%\dpdf\state.txt`. Preferences live in `config.toml` instead.
+//! `%APPDATA%\leme\state.txt`. Preferences live in `config.toml` instead.
 //!
 //! Format, one entry per line:
 //! ```text

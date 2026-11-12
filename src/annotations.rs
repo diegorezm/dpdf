@@ -1,5 +1,5 @@
 //! Highlights, underlines, strikethroughs, and notes. Stored per document in
-//! `%APPDATA%\dpdf\annotations\<hash>.toml`; the PDF itself is never touched.
+//! `%APPDATA%\leme\annotations\<hash>.toml`; the PDF itself is never touched.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -189,7 +189,7 @@ impl Annotations {
     /// Notes as Markdown for Obsidian, in reading order. `file` is the
     /// PDF's file name: each quote links to its page with
     /// `[[file#page=N]]`, which Obsidian opens at that page when the PDF is
-    /// in the vault, and carries a `^dpdf-<id>` block id that stays the
+    /// in the vault, and carries a `^leme-<id>` block id that stays the
     /// same across exports, so other notes can link to single quotes.
     pub fn to_markdown(&self, title: &str, file: &str, exported: u64) -> String {
         let mut items: Vec<&Annotation> = self.items.iter().collect();
@@ -199,7 +199,7 @@ impl Annotations {
         });
 
         let mut out = format!(
-            "---\ntitle: \"{}\"\nsource: \"[[{}]]\"\nexported: {}\nannotations: {}\ntags:\n  - dpdf\n---\n\n# {title}\n",
+            "---\ntitle: \"{}\"\nsource: \"[[{}]]\"\nexported: {}\nannotations: {}\ntags:\n  - leme\n---\n\n# {title}\n",
             yaml_escape(title),
             yaml_escape(file),
             date(exported),
@@ -227,7 +227,7 @@ impl Annotations {
             };
             let _ = write!(
                 out,
-                "\n> [!quote|{}] [[{file}#page={}|{place}]]\n> {text}\n\n^dpdf-{}\n",
+                "\n> [!quote|{}] [[{file}#page={}|{place}]]\n> {text}\n\n^leme-{}\n",
                 a.color,
                 a.page + 1,
                 a.id,
@@ -410,12 +410,12 @@ mod tests {
         assert_eq!(
             md,
             "---\ntitle: \"Book \\\"2\\\"\"\nsource: \"[[book.pdf]]\"\nexported: 1970-01-01\n\
-             annotations: 3\ntags:\n  - dpdf\n---\n\n# Book \"2\"\n\
+             annotations: 3\ntags:\n  - leme\n---\n\n# Book \"2\"\n\
              \n## Page 2\n\
-             \n> [!quote|yellow] [[book.pdf#page=2|p. 2]]\n> first\n\n^dpdf-3\n\
-             \n> [!quote|red] [[book.pdf#page=2|p. 2]]\n> ~~gone text~~\n\n^dpdf-2\n\
+             \n> [!quote|yellow] [[book.pdf#page=2|p. 2]]\n> first\n\n^leme-3\n\
+             \n> [!quote|red] [[book.pdf#page=2|p. 2]]\n> ~~gone text~~\n\n^leme-2\n\
              \n## Page 5\n\
-             \n> [!quote|yellow] [[book.pdf#page=5|p. 5, line 7]]\n> later\n\n^dpdf-1\n\
+             \n> [!quote|yellow] [[book.pdf#page=5|p. 5, line 7]]\n> later\n\n^leme-1\n\
              \nMy thought.\n"
         );
     }

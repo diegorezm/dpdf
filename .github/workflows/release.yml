@@ -1,6 +1,6 @@
 name: release
 
-# A pushed v* tag builds dpdf, packages a portable zip and an installer, and
+# A pushed v* tag builds Leme, packages a portable zip and an installer, and
 # publishes them as a GitHub release. Run it by hand to build the packages
 # without publishing.
 on:
@@ -38,9 +38,9 @@ jobs:
       - name: Portable zip
         shell: pwsh
         run: |
-          $dir = "dist/dpdf-${{ steps.version.outputs.version }}-windows-x64"
+          $dir = "dist/leme-${{ steps.version.outputs.version }}-windows-x64"
           New-Item -ItemType Directory -Force $dir | Out-Null
-          Copy-Item target/release/dpdf.exe, target/release/pdfium.dll, LICENSE, README.md $dir
+          Copy-Item target/release/leme.exe, target/release/pdfium.dll, LICENSE, README.md $dir
           Compress-Archive -Path $dir -DestinationPath "$dir.zip"
           Remove-Item -Recurse $dir
 
@@ -52,8 +52,10 @@ jobs:
             choco install innosetup --no-progress -y | Out-Null
             $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           }
-          & $iscc /Qp "/DAppVersion=${{ steps.version.outputs.version }}" installer/dpdf.iss
+          & $iscc /Qp "/DAppVersion=${{ steps.version.outputs.version }}" installer/leme.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+          # dpdf 1.1.0 and older update by downloading dpdf-<version>-setup.exe.
+          Copy-Item "dist/leme-${{ steps.version.outputs.version }}-setup.exe" "dist/dpdf-${{ steps.version.outputs.version }}-setup.exe"
 
       - name: Checksums
         shell: pwsh
@@ -64,7 +66,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: dpdf-${{ steps.version.outputs.version }}
+          name: leme-${{ steps.version.outputs.version }}
           path: dist/*
 
       - name: Publish release
@@ -74,4 +76,4 @@ jobs:
         shell: pwsh
         run: |
           gh release create "$env:GITHUB_REF_NAME" (Get-ChildItem dist -File).FullName `
-            --title "dpdf $env:GITHUB_REF_NAME" --generate-notes
+            --title "Leme $env:GITHUB_REF_NAME" --generate-notes

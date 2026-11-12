@@ -1,6 +1,19 @@
 # Changelog
 
-All notable changes to dpdf. Versions follow [Semantic Versioning](https://semver.org/).
+All notable changes to Leme (called dpdf until 1.1.0). Versions follow [Semantic Versioning](https://semver.org/).
+
+## Unreleased
+
+### Changed
+
+- **dpdf is now Leme.** The app, executable, and repository are renamed.
+  Settings, notes, and history move from `%APPDATA%\dpdf` to
+  `%APPDATA%\leme` on first start; the installer replaces the old copy and
+  its "Open with" entry. Installed copies of dpdf update to Leme as usual.
+- **New look.** Noite (dark, the new default) and Velino (light) themes: warm
+  ink and vellum with one rubric red. Older themes are still available.
+- **Markdown export.** Block ids are now `^leme-<id>` and the tag is `leme`;
+  links to `^dpdf-` ids in older exports stop resolving after re-exporting.
 
 ## 1.1.0 — 2026-11-10
 

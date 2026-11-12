@@ -9,7 +9,7 @@ export { Theme }
 export { Highlight, Mark, PageView, ThumbView, RecentItem, TabItem, PaletteItem, KeyRow, ThemeCard, SideItem, NoteFilter, SubjectItem, HighlightRow } from "structs.slint";
 
 export component AppWindow inherits Window {
-    title: root.page-count > 0 ? "\{root.document-title} — dpdf" : "dpdf";
+    title: root.page-count > 0 ? "\{root.document-title} — Leme" : "Leme";
     icon: @image-url("../assets/icon.svg");
     preferred-width: 1100px;
     preferred-height: 760px;
@@ -542,12 +542,12 @@ export component AppWindow inherits Window {
                             spacing: 10px;
 
                             Text {
-                                text: @tr("dpdf {} is available", root.update-version);
+                                text: @tr("Leme {} is available", root.update-version);
                                 color: Theme.text;
                                 font-size: Theme.font-size;
                             }
                             Text {
-                                text: root.update-installs ? @tr("dpdf will close, update, and open again.") : @tr("This copy isn't installed, so the release page will open.");
+                                text: root.update-installs ? @tr("Leme will close, update, and open again.") : @tr("This copy isn't installed, so the release page will open.");
                                 color: Theme.text-muted;
                                 font-size: Theme.font-size-small;
                                 wrap: word-wrap;
@@ -1056,7 +1056,7 @@ export component AppWindow inherits Window {
             }
         }
 
-        // Notification: "Downloading dpdf…", "Copied". Quick ones clear
+        // Notification: "Downloading Leme…", "Copied". Quick ones clear
         // themselves from Rust; the rest stay until done or dismissed.
         if root.status != "": Panel {
             x: parent.width - self.width - Theme.spacing;
@@ -1110,7 +1110,7 @@ export component AppWindow inherits Window {
 
 // Settings live in their own window, so they can sit beside the document.
 export component SettingsWindow inherits Window {
-    title: @tr("dpdf settings");
+    title: @tr("Leme settings");
     icon: @image-url("../assets/icon.svg");
     preferred-width: 900px;
     preferred-height: 640px;

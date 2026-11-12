@@ -1,4 +1,4 @@
-# Brazilian Portuguese for dpdf. Read by Slint (the .slint markup) and
+# Brazilian Portuguese for Leme. Read by Slint (the .slint markup) and
 # by src/i18n.rs (text built in Rust). msgids are the English texts.
 msgid ""
 msgstr ""
@@ -143,8 +143,8 @@ msgstr "Sessão {} excluída"
 msgid "Density"
 msgstr "Densidade"
 
-msgid "Downloading dpdf {}…"
-msgstr "Baixando o dpdf {}…"
+msgid "Downloading Leme {}…"
+msgstr "Baixando o Leme {}…"
 
 msgid "Edit in config.toml"
 msgstr "Editar no config.toml"
@@ -608,14 +608,14 @@ msgstr "\nconfig.toml, temas, anotações e histórico de leitura."
 msgid "any app"
 msgstr "qualquer app"
 
-msgid "dpdf settings"
-msgstr "Configurações do dpdf"
+msgid "Leme settings"
+msgstr "Configurações do Leme"
 
-msgid "dpdf will close, update, and open again."
-msgstr "O dpdf vai fechar, atualizar e abrir de novo."
+msgid "Leme will close, update, and open again."
+msgstr "O Leme vai fechar, atualizar e abrir de novo."
 
-msgid "dpdf {} is available"
-msgstr "dpdf {} disponível"
+msgid "Leme {} is available"
+msgstr "Leme {} disponível"
 
 msgid "front · back · tags"
 msgstr "frente · verso · tags"
